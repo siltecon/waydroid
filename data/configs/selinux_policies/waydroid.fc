@@ -31,10 +31,18 @@ HOME_DIR/\.local/share/applications/waydroid.*\.desktop  gen_context(system_u:ob
 /run/waydroid(/.*)?                              gen_context(system_u:object_r:waydroid_data_t,s0)
 /var/run/waydroid(/.*)?                          gen_context(system_u:object_r:waydroid_data_t,s0)
 
-# LXC container files specific to Waydroid
-/var/lib/lxc/waydroid0(/.*)?                     gen_context(system_u:object_r:waydroid_data_t,s0)
-/var/lib/lxc/waydroid0/config                    gen_context(system_u:object_r:waydroid_config_t,s0)
-/var/lib/lxc/waydroid0/rootfs(/.*)?              gen_context(system_u:object_r:waydroid_data_t,s0)
+# Additional Waydroid directories from actual structure
+/var/lib/waydroid/overlay_rw(/.*)?               gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/waydroid/cache_http(/.*)?               gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/waydroid/apks(/.*)?                     gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/waydroid/host-permissions(/.*)?         gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/waydroid/logs(/.*)?                     gen_context(system_u:object_r:waydroid_data_t,s0)
+
+# LXC container files specific to Waydroid (correct paths)
+/var/lib/waydroid/lxc/waydroid(/.*)?             gen_context(system_u:object_r:waydroid_container_t,s0)
+/var/lib/waydroid/containers/waydroid(/.*)?      gen_context(system_u:object_r:waydroid_runtime_t,s0)
+/var/lib/waydroid/lxc/waydroid/config            gen_context(system_u:object_r:waydroid_config_t,s0)
+/var/lib/waydroid/containers/waydroid/config     gen_context(system_u:object_r:waydroid_config_t,s0)
 
 # Android system files within container
 /var/lib/waydroid/rootfs/system(/.*)?            gen_context(system_u:object_r:waydroid_data_t,s0)
