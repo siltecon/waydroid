@@ -5,12 +5,25 @@
 /usr/lib/waydroid(/.*)?                          gen_context(system_u:object_r:waydroid_exec_t,s0)
 /usr/bin/waydroid                                gen_context(system_u:object_r:waydroid_exec_t,s0)
 
-# Waydroid data directories
+# Waydroid data directories (new layout under /data/)
+/data/waydroid(/.*)?                             gen_context(system_u:object_r:waydroid_data_t,s0)
+/data/waydroid/images(/.*)?                      gen_context(system_u:object_r:waydroid_data_t,s0)
+/data/waydroid/overlay(/.*)?                     gen_context(system_u:object_r:waydroid_data_t,s0)
+/data/waydroid/overlay_rw(/.*)?                  gen_context(system_u:object_r:waydroid_data_t,s0)
+/data/waydroid/rootfs(/.*)?                      gen_context(system_u:object_r:waydroid_data_t,s0)
+/data/waydroid/cache_http(/.*)?                  gen_context(system_u:object_r:waydroid_data_t,s0)
+/data/waydroid/host-permissions(/.*)?            gen_context(system_u:object_r:waydroid_data_t,s0)
+
+# Waydroid data directories (symlink path for backward compatibility)
 /var/lib/waydroid(/.*)?                          gen_context(system_u:object_r:waydroid_data_t,s0)
 /var/lib/waydroid/images(/.*)?                   gen_context(system_u:object_r:waydroid_data_t,s0)
 /var/lib/waydroid/overlay(/.*)?                  gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/waydroid/overlay_rw(/.*)?               gen_context(system_u:object_r:waydroid_data_t,s0)
 /var/lib/waydroid/rootfs(/.*)?                   gen_context(system_u:object_r:waydroid_data_t,s0)
 /var/lib/waydroid/data(/.*)?                     gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/waydroid/cache_http(/.*)?               gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/waydroid/host-permissions(/.*)?         gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/waydroid/logs(/.*)?                     gen_context(system_u:object_r:waydroid_data_t,s0)
 
 # Waydroid configuration files
 /var/lib/waydroid/waydroid\.cfg                  gen_context(system_u:object_r:waydroid_config_t,s0)
@@ -38,17 +51,38 @@ HOME_DIR/\.local/share/applications/waydroid.*\.desktop  gen_context(system_u:ob
 /var/lib/waydroid/host-permissions(/.*)?         gen_context(system_u:object_r:waydroid_data_t,s0)
 /var/lib/waydroid/logs(/.*)?                     gen_context(system_u:object_r:waydroid_data_t,s0)
 
-# LXC container files specific to Waydroid (correct paths)
+# LXC container files specific to Waydroid (symlink paths for backward compatibility)
 /var/lib/waydroid/lxc/waydroid(/.*)?             gen_context(system_u:object_r:waydroid_container_t,s0)
 /var/lib/waydroid/containers/waydroid(/.*)?      gen_context(system_u:object_r:waydroid_runtime_t,s0)
 /var/lib/waydroid/lxc/waydroid/config            gen_context(system_u:object_r:waydroid_config_t,s0)
 /var/lib/waydroid/containers/waydroid/config     gen_context(system_u:object_r:waydroid_config_t,s0)
 
-# Android system files within container
+# LXC container files specific to Waydroid (real paths under /data)
+/data/waydroid/lxc/waydroid(/.*)?                gen_context(system_u:object_r:waydroid_container_t,s0)
+/data/waydroid/containers/waydroid(/.*)?         gen_context(system_u:object_r:waydroid_runtime_t,s0)
+/data/waydroid/lxc/waydroid/config               gen_context(system_u:object_r:waydroid_config_t,s0)
+/data/waydroid/containers/waydroid/config        gen_context(system_u:object_r:waydroid_config_t,s0)
+
+# Android system files within container (symlink paths for backward compatibility)
 /var/lib/waydroid/rootfs/system(/.*)?            gen_context(system_u:object_r:waydroid_data_t,s0)
 /var/lib/waydroid/rootfs/vendor(/.*)?            gen_context(system_u:object_r:waydroid_data_t,s0)
 /var/lib/waydroid/rootfs/data(/.*)?              gen_context(system_u:object_r:waydroid_data_t,s0)
 /var/lib/waydroid/rootfs/apex(/.*)?              gen_context(system_u:object_r:waydroid_data_t,s0)
+
+# Android system files within container (real paths under /data)
+/data/waydroid/rootfs/system(/.*)?               gen_context(system_u:object_r:waydroid_data_t,s0)
+/data/waydroid/rootfs/vendor(/.*)?               gen_context(system_u:object_r:waydroid_data_t,s0)
+/data/waydroid/rootfs/data(/.*)?                 gen_context(system_u:object_r:waydroid_data_t,s0)
+/data/waydroid/rootfs/apex(/.*)?                 gen_context(system_u:object_r:waydroid_data_t,s0)
+
+# Shared data directories (certificates, VPN profiles, etc.)
+/data/shared(/.*)?                               gen_context(system_u:object_r:waydroid_shared_t,s0)
+/data/shared/certificates(/.*)?                  gen_context(system_u:object_r:waydroid_cert_t,s0)
+/data/shared/certificates/client(/.*)?           gen_context(system_u:object_r:waydroid_cert_t,s0)
+/data/shared/certificates/client/private(/.*)?   gen_context(system_u:object_r:waydroid_cert_t,s0)
+/data/shared/certificates/ca(/.*)?               gen_context(system_u:object_r:waydroid_cert_t,s0)
+/data/shared/vpn(/.*)?                           gen_context(system_u:object_r:waydroid_vpn_t,s0)
+/data/shared/vpn/profile(/.*)?                   gen_context(system_u:object_r:waydroid_vpn_t,s0)
 
 # Binder devices (if present)
 /dev/binder                                      gen_context(system_u:object_r:waydroid_data_t,s0)
