@@ -33,18 +33,36 @@ def get_vendor_type(args):
 
     return ret
 
+def get_lineage_version_from_android(android_version):
+    """Map Android version to LineageOS version for filtering"""
+    android_to_lineage = {
+        "11": "18.1",
+        "12": "19",
+        "13": "20.0"
+    }
+    return android_to_lineage.get(android_version, "20.0")
+
 def setup_config(args):
     cfg = tools.config.load(args)
     args.arch = helpers.arch.host()
     cfg["waydroid"]["arch"] = args.arch
 
-    args.vendor_type = get_vendor_type(args)
-    cfg["waydroid"]["vendor_type"] = args.vendor_type
+    # Allow vendor_type override from command line, otherwise auto-detect
+    if hasattr(args, 'vendor_type') and args.vendor_type:
+        cfg["waydroid"]["vendor_type"] = args.vendor_type
+    else:
+        args.vendor_type = get_vendor_type(args)
+        cfg["waydroid"]["vendor_type"] = args.vendor_type
 
     helpers.drivers.setupBinderNodes(args)
     cfg["waydroid"]["binder"] = args.BINDER_DRIVER
     cfg["waydroid"]["vndbinder"] = args.VNDBINDER_DRIVER
     cfg["waydroid"]["hwbinder"] = args.HWBINDER_DRIVER
+    
+    # Store no_gpu setting if provided
+    if hasattr(args, 'no_gpu') and args.no_gpu:
+        cfg["waydroid"]["no_gpu"] = "true"
+        logging.info("GPU acceleration disabled - using software rendering")
 
     has_preinstalled_images = False
     preinstalled_images_paths = tools.config.defaults["preinstalled_images_paths"]
@@ -78,11 +96,19 @@ def setup_config(args):
         args.rom_type = channels_cfg["channels"]["rom_type"]
     if not args.system_type:
         args.system_type = channels_cfg["channels"]["system_type"]
+    if not args.android_version:
+        args.android_version = channels_cfg["channels"]["android_version"]
 
     if not args.system_channel or not args.vendor_channel:
         logging.error("ERROR: You must provide 'System OTA' and 'Vendor OTA' URLs.")
         return False
 
+    # Store the desired LineageOS version for filtering later
+    if args.rom_type == "lineage":
+        args.desired_lineage_version = get_lineage_version_from_android(args.android_version)
+        logging.info(f"Targeting Android {args.android_version} (LineageOS {args.desired_lineage_version})")
+    
+    # Always use "lineage" in the URL - the server contains all versions
     args.system_ota = args.system_channel + "/" + args.rom_type + \
         "/waydroid_" + args.arch + "/" + args.system_type + ".json"
     system_request = helpers.http.retrieve(args.system_ota)
@@ -90,20 +116,35 @@ def setup_config(args):
         raise ValueError(
             "Failed to get system OTA channel: {}, error: {}".format(args.system_ota, system_request[0]))
 
-    device_codename = helpers.props.host_get(args, "ro.product.device")
-    args.vendor_type = None
-    for vendor in [device_codename, get_vendor_type(args)]:
+    # Check if vendor_type was manually specified
+    vendor_type_specified = hasattr(args, 'vendor_type') and args.vendor_type
+    
+    if vendor_type_specified:
+        # Use the specified vendor type directly
         vendor_ota = args.vendor_channel + "/waydroid_" + \
-            args.arch + "/" + vendor.replace(" ", "_") + ".json"
+            args.arch + "/" + args.vendor_type.replace(" ", "_") + ".json"
         vendor_request = helpers.http.retrieve(vendor_ota)
         if vendor_request[0] == 200:
-            args.vendor_type = vendor
             args.vendor_ota = vendor_ota
-            break
+        else:
+            raise ValueError(
+                "Failed to get vendor OTA channel for specified vendor type {}: {}".format(args.vendor_type, vendor_ota))
+    else:
+        # Auto-detect vendor type
+        device_codename = helpers.props.host_get(args, "ro.product.device")
+        args.vendor_type = None
+        for vendor in [device_codename, get_vendor_type(args)]:
+            vendor_ota = args.vendor_channel + "/waydroid_" + \
+                args.arch + "/" + vendor.replace(" ", "_") + ".json"
+            vendor_request = helpers.http.retrieve(vendor_ota)
+            if vendor_request[0] == 200:
+                args.vendor_type = vendor
+                args.vendor_ota = vendor_ota
+                break
 
-    if not args.vendor_type:
-        raise ValueError(
-            "Failed to get vendor OTA channel: {}".format(vendor_ota))
+        if not args.vendor_type:
+            raise ValueError(
+                "Failed to get vendor OTA channel: {}".format(vendor_ota))
 
     if args.system_ota != cfg["waydroid"].get("system_ota"):
         cfg["waydroid"]["system_datetime"] = tools.config.defaults["system_datetime"]
@@ -113,6 +154,7 @@ def setup_config(args):
     cfg["waydroid"]["vendor_type"] = args.vendor_type
     cfg["waydroid"]["system_ota"] = args.system_ota
     cfg["waydroid"]["vendor_ota"] = args.vendor_ota
+    cfg["waydroid"]["android_version"] = args.android_version
     tools.config.save(args, cfg)
     return True
 
@@ -274,6 +316,9 @@ def remote_init_server(args, params):
     args.system_channel = params["system_channel"]
     args.vendor_channel = params["vendor_channel"]
     args.system_type = params["system_type"]
+    args.android_version = params.get("android_version", "13")
+    args.vendor_type = params.get("vendor_type", None)
+    args.no_gpu = params.get("no_gpu", None) == "true"
     args.running_init_in_service = True
 
     p = multiprocessing.Process(target=background_remote_init_process, args=(args,))
@@ -341,9 +386,34 @@ def remote_init_client(args):
             grid.attach_next_to(sysTypeCombo, sysTypeLabel, Gtk.PositionType.RIGHT, 2, 1)
             self.sysType = sysTypeCombo
 
+            androidVersionLabel = Gtk.Label("Android Version")
+            androidVersionCombo = Gtk.ComboBoxText()
+            androidVersionCombo.set_entry_text_column(0)
+            for v in ["11", "12", "13"]:
+                androidVersionCombo.append_text(v)
+            androidVersionCombo.set_active(2)  # Default to Android 13
+            grid.attach(androidVersionLabel, 0, 3, 1, 1)
+            grid.attach_next_to(androidVersionCombo, androidVersionLabel, Gtk.PositionType.RIGHT, 2, 1)
+            self.androidVersion = androidVersionCombo
+
+            vendorTypeLabel = Gtk.Label("Vendor Type")
+            vendorTypeCombo = Gtk.ComboBoxText()
+            vendorTypeCombo.set_entry_text_column(0)
+            vendorTypeCombo.append_text("Auto-detect")
+            vendorTypeCombo.append_text("MAINLINE")
+            vendorTypeCombo.append_text("HALIUM_11")
+            vendorTypeCombo.set_active(0)  # Default to auto-detect
+            grid.attach(vendorTypeLabel, 0, 4, 1, 1)
+            grid.attach_next_to(vendorTypeCombo, vendorTypeLabel, Gtk.PositionType.RIGHT, 2, 1)
+            self.vendorType = vendorTypeCombo
+
+            noGpuCheck = Gtk.CheckButton(label="Disable GPU (use software rendering)")
+            grid.attach(noGpuCheck, 0, 5, 3, 1)
+            self.noGpu = noGpuCheck
+
             downloadBtn = Gtk.Button("Download")
             downloadBtn.connect("clicked", self.on_download_btn_clicked)
-            grid.attach(downloadBtn, 1,3,1,1)
+            grid.attach(downloadBtn, 1,6,1,1)
             self.downloadBtn = downloadBtn
 
             doneBtn = Gtk.Button("Done")
@@ -359,7 +429,7 @@ def remote_init_client(args):
             outTextView.set_property('editable', False)
             outTextView.set_property('cursor-visible', False)
             outScrolledWindow.add(outTextView)
-            grid.attach(outScrolledWindow, 0, 4, 3, 1)
+            grid.attach(outScrolledWindow, 0, 7, 3, 1)
             self.outScrolledWindow = outScrolledWindow
             self.outTextView = outTextView
             self.outBuffer = outTextView.get_buffer()
@@ -374,12 +444,16 @@ def remote_init_client(args):
             widget.set_sensitive(False)
             self.doneBtn.hide()
             self.outTextView.show()
-            init_params = (self.sysOta.get_text(), self.vndOta.get_text(), self.sysType.get_active_text())
+            vendor_type = self.vendorType.get_active_text()
+            if vendor_type == "Auto-detect":
+                vendor_type = None
+            init_params = (self.sysOta.get_text(), self.vndOta.get_text(), self.sysType.get_active_text(), 
+                          self.androidVersion.get_active_text(), vendor_type, self.noGpu.get_active())
             init_runner = threading.Thread(target=self.run_init, args=init_params)
             init_runner.daemon = True
             init_runner.start()
 
-        def run_init(self, systemOta, vendorOta, systemType):
+        def run_init(self, systemOta, vendorOta, systemType, androidVersion, vendorType, noGpu):
             def draw_sync(s):
                 if s.startswith('\r'):
                     last = self.outBuffer.get_iter_at_line(self.outBuffer.get_line_count()-1)
@@ -400,8 +474,13 @@ def remote_init_client(args):
                 params = {
                     "system_channel": self.sysOta.get_text(),
                     "vendor_channel": self.vndOta.get_text(),
-                    "system_type": self.sysType.get_active_text()
+                    "system_type": self.sysType.get_active_text(),
+                    "android_version": androidVersion
                 }
+                if vendorType:
+                    params["vendor_type"] = vendorType
+                if noGpu:
+                    params["no_gpu"] = "true"
                 tools.helpers.ipc.DBusContainerService("/Initializer", "id.waydro.Initializer").Init(params, timeout=310)
             except dbus.DBusException as e:
                 if e.get_dbus_name() == "org.freedesktop.DBus.Python.PermissionError":

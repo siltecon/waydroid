@@ -1,5 +1,6 @@
 import glob
 import os
+import tools.config
 import tools.helpers.props
 
 unsupported = ["nvidia"]
@@ -18,6 +19,11 @@ def getCardFromRender(args, dev):
 
 def getDriNode(args):
     cfg = tools.config.load(args)
+    
+    # Check if GPU is disabled
+    if cfg["waydroid"].get("no_gpu") == "true":
+        return "", ""
+    
     node = cfg["waydroid"].get("drm_device")
     if node:
         if not os.path.exists(node):

@@ -1,0 +1,13 @@
+# SELinux file contexts for Android Debug Bridge daemon in Waydroid
+
+# ADB daemon executable
+/var/lib/waydroid/rootfs/system/bin/adbd           gen_context(system_u:object_r:waydroid_adbd_exec_t,s0)
+
+# ADB data and socket files
+/var/lib/waydroid/rootfs/data/adb(/.*)?            gen_context(system_u:object_r:waydroid_adbd_data_t,s0)
+/var/lib/waydroid/rootfs/dev/socket/adbd           gen_context(system_u:object_r:waydroid_adbd_socket_t,s0)
+/var/lib/waydroid/rootfs/tmp/adb(/.*)?             gen_context(system_u:object_r:waydroid_adbd_data_t,s0)
+
+# ADB keys and configuration
+/var/lib/waydroid/rootfs/data/misc/adb(/.*)?       gen_context(system_u:object_r:waydroid_adbd_data_t,s0)
+/var/lib/waydroid/rootfs/system/etc/adb_keys       gen_context(system_u:object_r:waydroid_adbd_data_t,s0)

@@ -33,6 +33,12 @@ def arguments_init(subparser):
                      help="rom type (options: \"lineage\", \"bliss\" or OTA channel URL; default is LineageOS)")
     ret.add_argument("-s", "--system_type",
                      help="system type (options: VANILLA, FOSS or GAPPS; default is VANILLA)")
+    ret.add_argument("-a", "--android_version",
+                     help="Android version (options: 11, 12, 13; default is 13)")
+    ret.add_argument("-t", "--vendor_type",
+                     help="Vendor type (options: MAINLINE, HALIUM_11; default is auto-detect)")
+    ret.add_argument("-n", "--no_gpu", action="store_true",
+                     help="Disable GPU acceleration (use software rendering)")
     return ret
 
 def arguments_status(subparser):
@@ -123,13 +129,6 @@ def arguments_logcat(subparser):
     ret = subparser.add_parser("logcat", help="show android logcat")
     return ret
 
-def arguments_adb(subparser):
-    ret = subparser.add_parser("adb", help="manage adb connection")
-    sub = ret.add_subparsers(title="subaction", dest="subaction")
-    sub.add_parser("connect", help="connect adb to the Android container")
-    sub.add_parser("disconnect", help="disconnect adb from the Android container")
-    return ret
-
 def arguments():
     parser = argparse.ArgumentParser(prog="waydroid")
 
@@ -167,7 +166,6 @@ def arguments():
     arguments_firstLaunch(sub)
     arguments_shell(sub)
     arguments_logcat(sub)
-    arguments_adb(sub)
 
     if argcomplete:
         argcomplete.autocomplete(parser, always_complete_options="long")

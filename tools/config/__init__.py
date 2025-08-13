@@ -23,7 +23,9 @@ config_keys = ["arch",
                "vendor_datetime",
                "suspend_action",
                "mount_overlays",
-               "auto_adb"]
+               "auto_adb",
+               "android_version",
+               "no_gpu"]
 
 # Config file/commandline default values
 # $WORK gets replaced with the actual value for args.work (which may be
@@ -40,7 +42,7 @@ defaults = {
     ],
     "suspend_action": "freeze",
     "mount_overlays": "True",
-    "auto_adb": "False",
+    "auto_adb": "True",
     "container_xdg_runtime_dir": "/run/xdg",
     "container_wayland_display": "wayland-0",
 }
@@ -78,9 +80,11 @@ channels_defaults = {
     "system_channel": "https://ota.waydro.id/system",
     "vendor_channel": "https://ota.waydro.id/vendor",
     "rom_type": "lineage",
-    "system_type": "VANILLA"
+    "system_type": "VANILLA",
+    "android_version": "13"
 }
 channels_config_keys = ["system_channel",
                         "vendor_channel",
                         "rom_type",
-                        "system_type"]
+                        "system_type",
+                        "android_version"]

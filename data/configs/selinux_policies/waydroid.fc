@@ -1,0 +1,54 @@
+# SELinux file contexts for Waydroid
+# Defines file context mappings for Waydroid files and directories
+
+# Waydroid installation directory
+/usr/lib/waydroid(/.*)?                          gen_context(system_u:object_r:waydroid_exec_t,s0)
+/usr/bin/waydroid                                gen_context(system_u:object_r:waydroid_exec_t,s0)
+
+# Waydroid data directories
+/var/lib/waydroid(/.*)?                          gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/waydroid/images(/.*)?                   gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/waydroid/overlay(/.*)?                  gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/waydroid/rootfs(/.*)?                   gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/waydroid/data(/.*)?                     gen_context(system_u:object_r:waydroid_data_t,s0)
+
+# Waydroid configuration files
+/var/lib/waydroid/waydroid\.cfg                  gen_context(system_u:object_r:waydroid_config_t,s0)
+/var/lib/waydroid/waydroid\.prop                 gen_context(system_u:object_r:waydroid_config_t,s0)
+/var/lib/waydroid/waydroid_base\.prop            gen_context(system_u:object_r:waydroid_config_t,s0)
+/etc/waydroid(/.*)?                              gen_context(system_u:object_r:waydroid_config_t,s0)
+
+# User session data
+HOME_DIR/\.local/share/waydroid(/.*)?            gen_context(system_u:object_r:waydroid_data_t,s0)
+HOME_DIR/\.local/share/applications/waydroid.*\.desktop  gen_context(system_u:object_r:waydroid_data_t,s0)
+
+# Waydroid log files
+/var/lib/waydroid/waydroid\.log                  gen_context(system_u:object_r:waydroid_log_t,s0)
+/var/lib/waydroid/.*\.log                        gen_context(system_u:object_r:waydroid_log_t,s0)
+/var/log/waydroid(/.*)?                          gen_context(system_u:object_r:waydroid_log_t,s0)
+
+# Runtime files
+/run/waydroid(/.*)?                              gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/run/waydroid(/.*)?                          gen_context(system_u:object_r:waydroid_data_t,s0)
+
+# LXC container files specific to Waydroid
+/var/lib/lxc/waydroid0(/.*)?                     gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/lxc/waydroid0/config                    gen_context(system_u:object_r:waydroid_config_t,s0)
+/var/lib/lxc/waydroid0/rootfs(/.*)?              gen_context(system_u:object_r:waydroid_data_t,s0)
+
+# Android system files within container
+/var/lib/waydroid/rootfs/system(/.*)?            gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/waydroid/rootfs/vendor(/.*)?            gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/waydroid/rootfs/data(/.*)?              gen_context(system_u:object_r:waydroid_data_t,s0)
+/var/lib/waydroid/rootfs/apex(/.*)?              gen_context(system_u:object_r:waydroid_data_t,s0)
+
+# Binder devices (if present)
+/dev/binder                                      gen_context(system_u:object_r:waydroid_data_t,s0)
+/dev/vndbinder                                   gen_context(system_u:object_r:waydroid_data_t,s0)
+/dev/hwbinder                                    gen_context(system_u:object_r:waydroid_data_t,s0)
+/dev/anbox-binder                                gen_context(system_u:object_r:waydroid_data_t,s0)
+/dev/anbox-vndbinder                             gen_context(system_u:object_r:waydroid_data_t,s0)
+/dev/anbox-hwbinder                              gen_context(system_u:object_r:waydroid_data_t,s0)
+
+# Network interface
+/sys/class/net/waydroid0(/.*)?                   gen_context(system_u:object_r:waydroid_net_t,s0)

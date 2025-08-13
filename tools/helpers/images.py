@@ -31,6 +31,15 @@ def get(args):
     if len(system_responses) < 1:
         raise ValueError("No images found on system channel")
 
+    # Filter by LineageOS version if specified
+    if hasattr(args, 'desired_lineage_version'):
+        filtered_responses = [r for r in system_responses if r.get('version') == args.desired_lineage_version]
+        if filtered_responses:
+            system_responses = filtered_responses
+            logging.info(f"Found {len(filtered_responses)} image(s) for LineageOS {args.desired_lineage_version}")
+        else:
+            logging.warning(f"No images found for LineageOS {args.desired_lineage_version}, using latest available")
+
     for system_response in system_responses:
         if system_response['datetime'] > int(cfg["waydroid"]["system_datetime"]):
             images_zip = helpers.http.download(

@@ -14,6 +14,13 @@ def get_config(args):
     args.system_ota = cfg["waydroid"]["system_ota"]
     args.vendor_ota = cfg["waydroid"]["vendor_ota"]
     args.session = None
+    
+    # Load Android version and map to LineageOS version for filtering
+    if "android_version" in cfg["waydroid"]:
+        args.android_version = cfg["waydroid"]["android_version"]
+        from tools.actions.initializer import get_lineage_version_from_android
+        if "lineage" in args.system_ota:
+            args.desired_lineage_version = get_lineage_version_from_android(args.android_version)
 
 def migration(args):
     try:
@@ -23,11 +30,6 @@ def migration(args):
             tools.helpers.run.user(args, ["chmod", "-R", "g-w,o-w"] + [os.path.join(args.work, f) for f in chmod_paths], check=False)
             tools.helpers.run.user(args, ["chmod", "g-w,o-w", args.work], check=False)
             os.remove(os.path.join(args.work, "session.cfg"))
-        if versiontuple(old_ver) <= versiontuple("1.6.0"):
-            # Because we now default adb to secure, disable auto_adb to avoid prompting the user on every session startup
-            cfg = tools.config.load(args)
-            cfg["waydroid"]["auto_adb"] = "False"
-            tools.config.save(args, cfg)
     except:
         pass
 

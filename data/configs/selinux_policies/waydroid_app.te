@@ -1,0 +1,105 @@
+# SELinux policy module for Android applications running in Waydroid
+# Type enforcement rules for Android apps
+
+policy_module(waydroid_app, 1.0.0)
+
+require {
+    type waydroid_t;
+    type waydroid_data_t;
+    type tmpfs_t;
+    type proc_t;
+    type sysfs_t;
+    type devpts_t;
+    type user_home_t;
+    class process { transition signal ptrace setpgid setcap };
+    class file { read write create unlink open getattr setattr append execute execute_no_trans };
+    class dir { read write create search add_name remove_name open getattr setattr };
+    class lnk_file { read create getattr };
+    class chr_file { read write open getattr setattr ioctl };
+    class sock_file { create write getattr setattr unlink };
+    class capability { sys_nice wake_alarm setpcap setgid setuid sys_ptrace sys_admin sys_time net_admin net_raw net_bind_service kill dac_override chown };
+    class capability2 { wake_alarm block_suspend };
+    class tcp_socket { create connect bind getopt setopt read write };
+    class udp_socket { create connect bind getopt setopt read write };
+    class unix_stream_socket { create connect bind getopt setopt read write };
+    class filesystem { mount unmount };
+}
+
+# Define Android app domain
+type waydroid_app_t;
+type waydroid_app_exec_t;
+type waydroid_app_data_t;
+type waydroid_app_cache_t;
+
+# Domain setup
+domain_type(waydroid_app_t)
+domain_entry_file(waydroid_app_t, waydroid_app_exec_t)
+role system_r types waydroid_app_t;
+
+# Allow transition from waydroid container to app domain
+allow waydroid_t waydroid_app_t:process transition;
+allow waydroid_app_t waydroid_app_exec_t:file { execute execute_no_trans };
+
+# Process capabilities needed by Android apps
+allow waydroid_app_t self:process { signal ptrace setpgid setcap };
+allow waydroid_app_t self:capability { sys_nice setpcap setgid setuid sys_ptrace sys_admin sys_time net_admin net_raw net_bind_service kill dac_override chown };
+allow waydroid_app_t self:capability2 { wake_alarm block_suspend };
+
+# App data access
+allow waydroid_app_t waydroid_app_data_t:dir { read write create search add_name remove_name open getattr setattr };
+allow waydroid_app_t waydroid_app_data_t:file { read write create unlink open getattr setattr append execute };
+allow waydroid_app_t waydroid_app_data_t:lnk_file { read create getattr };
+allow waydroid_app_t waydroid_app_cache_t:dir { read write create search add_name remove_name open getattr setattr };
+allow waydroid_app_t waydroid_app_cache_t:file { read write create unlink open getattr setattr append };
+
+# Android system data access (read-only for most)
+allow waydroid_app_t waydroid_data_t:dir { read search open getattr };
+allow waydroid_app_t waydroid_data_t:file { read open getattr execute };
+allow waydroid_app_t waydroid_data_t:lnk_file { read getattr };
+
+# /data directory access for Android apps
+# Apps need write access to specific /data subdirectories
+allow waydroid_app_t waydroid_data_t:dir { write add_name remove_name };
+allow waydroid_app_t waydroid_data_t:file { write create unlink setattr append };
+
+# /proc access (restricted)
+allow waydroid_app_t proc_t:dir { read search open getattr };
+allow waydroid_app_t proc_t:file { read open getattr };
+allow waydroid_app_t self:dir { read search open getattr };
+allow waydroid_app_t self:file { read write open getattr };
+
+# /sys access (read-only)
+allow waydroid_app_t sysfs_t:dir { read search open getattr };
+allow waydroid_app_t sysfs_t:file { read open getattr };
+allow waydroid_app_t sysfs_t:lnk_file { read getattr };
+
+# Device access
+allow waydroid_app_t devpts_t:chr_file { read write open getattr setattr ioctl };
+
+# Temporary files
+allow waydroid_app_t tmpfs_t:dir { read write create search add_name remove_name open getattr setattr };
+allow waydroid_app_t tmpfs_t:file { read write create unlink open getattr setattr append };
+allow waydroid_app_t tmpfs_t:sock_file { create write getattr setattr unlink };
+
+# Network access for apps
+allow waydroid_app_t self:tcp_socket { create connect bind getopt setopt read write };
+allow waydroid_app_t self:udp_socket { create connect bind getopt setopt read write };
+allow waydroid_app_t self:unix_stream_socket { create connect bind getopt setopt read write };
+
+# Mount operations for storage
+allow waydroid_app_t tmpfs_t:filesystem { mount unmount };
+
+# Inter-process communication with container
+allow waydroid_app_t waydroid_t:unix_stream_socket { connectto };
+allow waydroid_app_t waydroid_t:process { signal };
+allow waydroid_t waydroid_app_t:process { signal ptrace };
+
+# Shared memory and IPC
+allow waydroid_app_t self:shm { create destroy getattr setattr read write associate unix_read unix_write lock };
+allow waydroid_app_t self:sem { create destroy getattr setattr read write associate unix_read unix_write };
+
+# Binder IPC for Android
+ifdef(`android_binder', `
+    allow waydroid_app_t self:binder { call transfer };
+    allow waydroid_app_t waydroid_t:binder { call transfer };
+')

@@ -16,6 +16,7 @@ SYSD_DIR := $(PREFIX)/lib/systemd/system
 DBUS_DIR := $(PREFIX)/share/dbus-1
 POLKIT_DIR := $(PREFIX)/share/polkit-1
 APPARMOR_DIR := $(SYSCONFDIR)/apparmor.d
+SELINUX_DIR := $(PREFIX)/share/selinux/packages
 
 INSTALL_WAYDROID_DIR := $(DESTDIR)$(WAYDROID_DIR)
 INSTALL_BIN_DIR := $(DESTDIR)$(BIN_DIR)
@@ -28,6 +29,7 @@ INSTALL_SYSD_DIR := $(DESTDIR)$(SYSD_DIR)
 INSTALL_DBUS_DIR := $(DESTDIR)$(DBUS_DIR)
 INSTALL_POLKIT_DIR := $(DESTDIR)$(POLKIT_DIR)
 INSTALL_APPARMOR_DIR := $(DESTDIR)$(APPARMOR_DIR)
+INSTALL_SELINUX_DIR := $(DESTDIR)$(SELINUX_DIR)
 
 build:
 	@echo "Nothing to build, run 'make install' to copy the files!"
@@ -72,3 +74,25 @@ install_apparmor:
 		apparmor_parser -r -T -W "$(INSTALL_APPARMOR_DIR)/android_app"; \
 		apparmor_parser -r -T -W "$(INSTALL_APPARMOR_DIR)/lxc/lxc-waydroid"; \
 	fi
+
+install_selinux:
+	# Install SELinux policy modules for Waydroid
+	install -d $(INSTALL_SELINUX_DIR)/waydroid
+	cp -f data/configs/selinux_policies/*.te $(INSTALL_SELINUX_DIR)/waydroid/
+	cp -f data/configs/selinux_policies/*.fc $(INSTALL_SELINUX_DIR)/waydroid/
+	cp -f data/configs/selinux_policies/Makefile $(INSTALL_SELINUX_DIR)/waydroid/
+	# Build and load the policies if not just packaging and SELinux is enabled
+	if [ -z $(DESTDIR) ] && { selinuxenabled || getenforce 2>/dev/null | grep -q Enforcing; } 2>/dev/null; then \
+		echo "Building and installing SELinux policy modules..."; \
+		cd $(INSTALL_SELINUX_DIR)/waydroid && $(MAKE) install; \
+	else \
+		echo "SELinux policies installed to $(INSTALL_SELINUX_DIR)/waydroid"; \
+		echo "To load the policies manually, run: cd $(SELINUX_DIR)/waydroid && make install"; \
+	fi
+
+uninstall_selinux:
+	# Remove SELinux policy modules if SELinux is enabled
+	if { selinuxenabled || getenforce 2>/dev/null | grep -q Enforcing; } 2>/dev/null; then \
+		semodule -r waydroid waydroid_app waydroid_adbd 2>/dev/null || true; \
+	fi
+	rm -rf $(INSTALL_SELINUX_DIR)/waydroid

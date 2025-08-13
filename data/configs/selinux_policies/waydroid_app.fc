@@ -1,0 +1,26 @@
+# SELinux file contexts for Android applications in Waydroid
+
+# Android app executables
+/var/lib/waydroid/rootfs/system/bin/app_process    gen_context(system_u:object_r:waydroid_app_exec_t,s0)
+/var/lib/waydroid/rootfs/system/bin/app_process32  gen_context(system_u:object_r:waydroid_app_exec_t,s0)
+/var/lib/waydroid/rootfs/system/bin/app_process64  gen_context(system_u:object_r:waydroid_app_exec_t,s0)
+
+# App data directories
+/var/lib/waydroid/rootfs/data/app(/.*)?            gen_context(system_u:object_r:waydroid_app_data_t,s0)
+/var/lib/waydroid/rootfs/data/data(/.*)?           gen_context(system_u:object_r:waydroid_app_data_t,s0)
+/var/lib/waydroid/rootfs/data/user(/.*)?           gen_context(system_u:object_r:waydroid_app_data_t,s0)
+/var/lib/waydroid/rootfs/data/user_de(/.*)?        gen_context(system_u:object_r:waydroid_app_data_t,s0)
+/var/lib/waydroid/rootfs/data/media(/.*)?          gen_context(system_u:object_r:waydroid_app_data_t,s0)
+
+# App cache directories
+/var/lib/waydroid/rootfs/data/dalvik-cache(/.*)?   gen_context(system_u:object_r:waydroid_app_cache_t,s0)
+/var/lib/waydroid/rootfs/cache(/.*)?               gen_context(system_u:object_r:waydroid_app_cache_t,s0)
+
+# Storage directories
+/var/lib/waydroid/rootfs/storage(/.*)?             gen_context(system_u:object_r:waydroid_app_data_t,s0)
+/var/lib/waydroid/rootfs/mnt/user(/.*)?            gen_context(system_u:object_r:waydroid_app_data_t,s0)
+
+# Android runtime files
+/var/lib/waydroid/rootfs/data/misc/profiles(/.*)?  gen_context(system_u:object_r:waydroid_app_data_t,s0)
+/var/lib/waydroid/rootfs/data/system_ce(/.*)?      gen_context(system_u:object_r:waydroid_app_data_t,s0)
+/var/lib/waydroid/rootfs/data/tombstone(/.*)?      gen_context(system_u:object_r:waydroid_app_data_t,s0)

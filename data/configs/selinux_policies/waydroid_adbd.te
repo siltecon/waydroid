@@ -1,0 +1,110 @@
+# SELinux policy module for Android Debug Bridge daemon in Waydroid
+# Type enforcement rules for adbd
+
+policy_module(waydroid_adbd, 1.0.0)
+
+require {
+    type waydroid_t;
+    type waydroid_data_t;
+    type waydroid_app_t;
+    type tmpfs_t;
+    type proc_t;
+    type sysfs_t;
+    type devpts_t;
+    type shell_exec_t;
+    class process { transition signal ptrace setpgid setcap setrlimit };
+    class file { read write create unlink open getattr setattr append execute execute_no_trans };
+    class dir { read write create search add_name remove_name open getattr setattr };
+    class lnk_file { read create getattr };
+    class chr_file { read write open getattr setattr ioctl };
+    class capability { sys_nice sys_ptrace sys_admin sys_resource sys_time net_admin net_raw net_bind_service dac_override dac_read_search chown fowner fsetid kill mknod setgid setuid setpcap syslog };
+    class capability2 { wake_alarm block_suspend };
+    class tcp_socket { create connect listen accept bind getopt setopt read write };
+    class unix_stream_socket { create connect listen accept bind getopt setopt read write };
+    class filesystem { mount unmount };
+}
+
+# Define ADB daemon domain
+type waydroid_adbd_t;
+type waydroid_adbd_exec_t;
+type waydroid_adbd_data_t;
+type waydroid_adbd_socket_t;
+
+# Domain setup
+domain_type(waydroid_adbd_t)
+domain_entry_file(waydroid_adbd_t, waydroid_adbd_exec_t)
+role system_r types waydroid_adbd_t;
+
+# Allow transition from waydroid container to adbd domain
+allow waydroid_t waydroid_adbd_t:process transition;
+allow waydroid_adbd_t waydroid_adbd_exec_t:file { execute execute_no_trans };
+
+# Process capabilities for ADB daemon
+allow waydroid_adbd_t self:process { signal ptrace setpgid setcap setrlimit };
+allow waydroid_adbd_t self:capability { 
+    sys_nice sys_ptrace sys_admin sys_resource sys_time 
+    net_admin net_raw net_bind_service 
+    dac_override dac_read_search 
+    chown fowner fsetid kill mknod 
+    setgid setuid setpcap syslog 
+};
+allow waydroid_adbd_t self:capability2 { wake_alarm block_suspend };
+
+# ADB data access
+allow waydroid_adbd_t waydroid_adbd_data_t:dir { read write create search add_name remove_name open getattr setattr };
+allow waydroid_adbd_t waydroid_adbd_data_t:file { read write create unlink open getattr setattr append };
+allow waydroid_adbd_t waydroid_adbd_socket_t:sock_file { create write getattr setattr unlink };
+
+# Full access to Android data for debugging
+allow waydroid_adbd_t waydroid_data_t:dir { read write create search add_name remove_name open getattr setattr };
+allow waydroid_adbd_t waydroid_data_t:file { read write create unlink open getattr setattr append execute };
+allow waydroid_adbd_t waydroid_data_t:lnk_file { read create getattr };
+
+# /proc access (full for debugging)
+allow waydroid_adbd_t proc_t:dir { read write search open getattr };
+allow waydroid_adbd_t proc_t:file { read write open getattr setattr };
+
+# /sys access (full for debugging)
+allow waydroid_adbd_t sysfs_t:dir { read write search open getattr };
+allow waydroid_adbd_t sysfs_t:file { read write open getattr setattr };
+allow waydroid_adbd_t sysfs_t:lnk_file { read getattr };
+
+# Device access
+allow waydroid_adbd_t devpts_t:chr_file { read write open getattr setattr ioctl };
+allow waydroid_adbd_t self:chr_file { read write open getattr setattr ioctl };
+
+# Temporary files
+allow waydroid_adbd_t tmpfs_t:dir { read write create search add_name remove_name open getattr setattr };
+allow waydroid_adbd_t tmpfs_t:file { read write create unlink open getattr setattr append execute };
+
+# Network access for ADB
+allow waydroid_adbd_t self:tcp_socket { create connect listen accept bind getopt setopt read write };
+allow waydroid_adbd_t self:unix_stream_socket { create connect listen accept bind getopt setopt read write };
+
+# Mount operations
+allow waydroid_adbd_t self:filesystem { mount unmount };
+allow waydroid_adbd_t tmpfs_t:filesystem { mount unmount };
+
+# Shell execution for ADB commands
+allow waydroid_adbd_t shell_exec_t:file { read execute execute_no_trans open getattr };
+
+# Process debugging capabilities
+allow waydroid_adbd_t waydroid_t:process { ptrace signal };
+allow waydroid_adbd_t waydroid_app_t:process { ptrace signal };
+allow waydroid_adbd_t self:process { ptrace signal };
+
+# Inter-process communication
+allow waydroid_adbd_t waydroid_t:unix_stream_socket { connectto };
+allow waydroid_t waydroid_adbd_t:process { signal };
+
+# Shared memory and IPC for debugging
+allow waydroid_adbd_t self:shm { create destroy getattr setattr read write associate unix_read unix_write lock };
+allow waydroid_adbd_t self:sem { create destroy getattr setattr read write associate unix_read unix_write };
+allow waydroid_adbd_t self:msgq { create destroy getattr setattr read write associate unix_read unix_write enqueue };
+
+# Binder IPC for Android
+ifdef(`android_binder', `
+    allow waydroid_adbd_t self:binder { call transfer set_context_mgr };
+    allow waydroid_adbd_t waydroid_t:binder { call transfer };
+    allow waydroid_adbd_t waydroid_app_t:binder { call transfer };
+')

@@ -1,0 +1,137 @@
+# SELinux policy module for Waydroid container
+# Type enforcement rules for the main LXC container
+
+policy_module(waydroid, 1.0.0)
+
+require {
+    type lxc_t;
+    type lxc_var_lib_t;
+    type lxc_var_run_t;
+    type init_t;
+    type kernel_t;
+    type sysfs_t;
+    type proc_t;
+    type devpts_t;
+    type tmpfs_t;
+    type user_home_t;
+    type unconfined_t;
+    type net_conf_t;
+    type node_t;
+    type port_t;
+    class process { transition signal ptrace setpgid setcap setrlimit };
+    class file { read write create unlink open getattr setattr append execute execute_no_trans };
+    class dir { read write create search add_name remove_name open getattr setattr };
+    class lnk_file { read create getattr };
+    class chr_file { read write open getattr setattr ioctl };
+    class blk_file { read write open getattr setattr };
+    class sock_file { create write getattr setattr unlink };
+    class fifo_file { read write create open getattr };
+    class capability { sys_admin sys_nice sys_ptrace sys_resource sys_time net_admin net_raw net_bind_service dac_override dac_read_search chown fowner fsetid kill mknod setgid setuid setpcap syslog ipc_lock sys_chroot sys_module };
+    class capability2 { wake_alarm block_suspend };
+    class tcp_socket { create connect listen accept bind getopt setopt read write };
+    class udp_socket { create connect bind getopt setopt read write };
+    class unix_stream_socket { create connect listen accept bind getopt setopt read write };
+    class unix_dgram_socket { create connect bind sendto recvfrom };
+    class netlink_route_socket { create bind getattr write read nlmsg_read };
+    class packet_socket { create bind ioctl getopt setopt };
+    class filesystem { mount unmount remount };
+}
+
+# Define Waydroid container domain
+type waydroid_t;
+type waydroid_exec_t;
+type waydroid_data_t;
+type waydroid_config_t;
+type waydroid_net_t;
+type waydroid_log_t;
+
+# Domain transitions
+domain_type(waydroid_t)
+domain_entry_file(waydroid_t, waydroid_exec_t)
+role system_r types waydroid_t;
+
+# Allow transition from init/lxc to waydroid domain
+allow lxc_t waydroid_t:process transition;
+allow init_t waydroid_t:process transition;
+allow waydroid_t waydroid_exec_t:file { execute execute_no_trans };
+
+# Basic process capabilities
+allow waydroid_t self:process { signal ptrace setpgid setcap setrlimit };
+allow waydroid_t self:capability { sys_admin sys_nice sys_ptrace sys_resource sys_time net_admin net_raw net_bind_service dac_override dac_read_search chown fowner fsetid kill mknod setgid setuid setpcap syslog ipc_lock sys_chroot sys_module };
+allow waydroid_t self:capability2 { wake_alarm block_suspend };
+
+# File system access
+allow waydroid_t waydroid_data_t:dir { read write create search add_name remove_name open getattr setattr };
+allow waydroid_t waydroid_data_t:file { read write create unlink open getattr setattr append execute };
+allow waydroid_t waydroid_data_t:lnk_file { read create getattr };
+allow waydroid_t waydroid_config_t:dir { read search open getattr };
+allow waydroid_t waydroid_config_t:file { read open getattr };
+allow waydroid_t waydroid_log_t:dir { read write create search add_name open getattr setattr };
+allow waydroid_t waydroid_log_t:file { read write create open getattr setattr append };
+
+# /proc access
+allow waydroid_t proc_t:dir { read search open getattr };
+allow waydroid_t proc_t:file { read write open getattr setattr };
+allow waydroid_t self:dir { read search open getattr };
+allow waydroid_t self:file { read write open getattr };
+
+# /sys access
+allow waydroid_t sysfs_t:dir { read search open getattr };
+allow waydroid_t sysfs_t:file { read write open getattr setattr };
+allow waydroid_t sysfs_t:lnk_file { read getattr };
+
+# Device access
+allow waydroid_t devpts_t:chr_file { read write open getattr setattr ioctl };
+allow waydroid_t self:chr_file { read write open getattr setattr ioctl };
+allow waydroid_t self:blk_file { read write open getattr setattr };
+
+# Temporary files
+allow waydroid_t tmpfs_t:dir { read write create search add_name remove_name open getattr setattr };
+allow waydroid_t tmpfs_t:file { read write create unlink open getattr setattr append execute };
+allow waydroid_t tmpfs_t:lnk_file { read create getattr };
+allow waydroid_t tmpfs_t:sock_file { create write getattr setattr unlink };
+allow waydroid_t tmpfs_t:fifo_file { read write create open getattr };
+
+# Network access
+allow waydroid_t self:tcp_socket { create connect listen accept bind getopt setopt read write };
+allow waydroid_t self:udp_socket { create connect bind getopt setopt read write };
+allow waydroid_t self:unix_stream_socket { create connect listen accept bind getopt setopt read write };
+allow waydroid_t self:unix_dgram_socket { create connect bind sendto recvfrom };
+allow waydroid_t self:netlink_route_socket { create bind getattr write read nlmsg_read };
+allow waydroid_t self:packet_socket { create bind ioctl getopt setopt };
+allow waydroid_t node_t:tcp_socket { node_bind };
+allow waydroid_t node_t:udp_socket { node_bind };
+allow waydroid_t port_t:tcp_socket { name_bind name_connect };
+allow waydroid_t port_t:udp_socket { name_bind };
+allow waydroid_t waydroid_net_t:netif { tcp_send tcp_recv udp_send udp_recv };
+
+# Mount operations
+allow waydroid_t self:filesystem { mount unmount remount };
+allow waydroid_t tmpfs_t:filesystem { mount unmount };
+allow waydroid_t proc_t:filesystem { mount unmount };
+allow waydroid_t sysfs_t:filesystem { mount unmount };
+
+# LXC container interaction
+allow waydroid_t lxc_var_lib_t:dir { read write search add_name remove_name open getattr setattr };
+allow waydroid_t lxc_var_lib_t:file { read write create unlink open getattr setattr append };
+allow waydroid_t lxc_var_run_t:dir { read write search add_name remove_name open getattr setattr };
+allow waydroid_t lxc_var_run_t:file { read write create unlink open getattr setattr append };
+allow waydroid_t lxc_var_run_t:sock_file { create write getattr setattr unlink };
+
+# Inter-process communication
+allow waydroid_t init_t:unix_stream_socket { connectto };
+allow waydroid_t lxc_t:unix_stream_socket { connectto };
+allow waydroid_t self:sem { create destroy getattr setattr read write associate unix_read unix_write };
+allow waydroid_t self:shm { create destroy getattr setattr read write associate unix_read unix_write lock };
+allow waydroid_t self:msgq { create destroy getattr setattr read write associate unix_read unix_write enqueue };
+
+# Signal permissions
+allow waydroid_t self:process { signal sigchld sigkill sigstop signull };
+allow waydroid_t init_t:process { signal };
+allow waydroid_t lxc_t:process { signal };
+
+# Binder device access for Android IPC
+ifdef(`android_binder', `
+    allow waydroid_t device_t:chr_file { read write open ioctl };
+    allow waydroid_t self:binder { call transfer set_context_mgr };
+')
