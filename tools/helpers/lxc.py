@@ -33,47 +33,73 @@ def add_node_entry(nodes, src, dist, mnt_type, options, check):
     return True
 
 def is_selinux_enabled():
-    """Check if SELinux is available and enabled"""
+    """Check if SELinux is available and enabled using sestatus command"""
     try:
-        # Check kernel support
-        if not os.path.exists("/sys/fs/selinux"):
-            logging.debug("SELinux: /sys/fs/selinux not found")
+        # Use sestatus command for reliable detection
+        if shutil.which("sestatus") is None:
+            logging.debug("SELinux: sestatus command not found")
             return False
         
-        # Check if SELinux is running (not just compiled in)
-        with open("/sys/fs/selinux/status", "r") as f:
-            status = f.read().strip()
-        
-        # Check if enforce file exists (indicates active SELinux)
-        if not os.path.exists("/sys/fs/selinux/enforce"):
-            logging.debug("SELinux: /sys/fs/selinux/enforce not found")
+        # Run sestatus and parse output
+        result = subprocess.run(["sestatus"], capture_output=True, text=True, timeout=5)
+        if result.returncode != 0:
+            logging.debug(f"SELinux: sestatus command failed with return code {result.returncode}")
             return False
-            
-        logging.debug(f"SELinux: status={status}, enforce file exists")
-        return status == "enabled"
+        
+        output = result.stdout
+        logging.debug(f"SELinux: sestatus output: {output}")
+        
+        # Parse the output for enabled status
+        for line in output.splitlines():
+            if line.startswith("SELinux status:"):
+                status = line.split(":", 1)[1].strip()
+                logging.debug(f"SELinux: parsed status = '{status}'")
+                return status == "enabled"
+        
+        logging.debug("SELinux: status line not found in sestatus output")
+        return False
+        
+    except subprocess.TimeoutExpired:
+        logging.debug("SELinux: sestatus command timed out")
+        return False
     except Exception as e:
         logging.debug(f"SELinux detection error: {e}")
         return False
 
 def is_apparmor_enabled():
-    """Check if AppArmor is available and enabled"""
+    """Check if AppArmor is available and enabled using multiple methods"""
     try:
-        # Check kernel support
-        if not os.path.exists("/sys/kernel/security/apparmor"):
-            logging.debug("AppArmor: /sys/kernel/security/apparmor not found")
-            return False
+        # Method 1: Check if aa-status command exists and works
+        if shutil.which("aa-status") is not None:
+            result = subprocess.run(["aa-status", "--quiet"], capture_output=True, timeout=5)
+            if result.returncode == 0:
+                logging.debug("AppArmor: aa-status command succeeded")
+                return True
         
-        # Check if profiles are loaded
-        with open("/sys/kernel/security/apparmor/profiles", "r") as f:
-            profiles = f.read().strip()
+        # Method 2: Check systemd service status
+        if shutil.which("systemctl") is not None:
+            result = subprocess.run(["systemctl", "is-active", "-q", "apparmor"], capture_output=True, timeout=5)
+            if result.returncode == 0:
+                logging.debug("AppArmor: systemd service is active")
+                return True
         
-        # Check if securityfs is mounted
-        if not os.path.exists("/sys/kernel/security/apparmor/version"):
-            logging.debug("AppArmor: /sys/kernel/security/apparmor/version not found")
-            return False
-            
-        logging.debug(f"AppArmor: profiles loaded={len(profiles) > 0}, version file exists")
-        return len(profiles) > 0
+        # Method 3: Check kernel filesystem (fallback)
+        if os.path.exists("/sys/kernel/security/apparmor"):
+            try:
+                with open("/sys/kernel/security/apparmor/profiles", "r") as f:
+                    profiles = f.read().strip()
+                if len(profiles) > 0:
+                    logging.debug(f"AppArmor: profiles loaded via filesystem check")
+                    return True
+            except Exception as e:
+                logging.debug(f"AppArmor: filesystem check failed: {e}")
+        
+        logging.debug("AppArmor: not enabled via any detection method")
+        return False
+        
+    except subprocess.TimeoutExpired:
+        logging.debug("AppArmor: command timed out")
+        return False
     except Exception as e:
         logging.debug(f"AppArmor detection error: {e}")
         return False
