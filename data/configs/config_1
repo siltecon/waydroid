@@ -2,7 +2,8 @@ lxc.utsname = waydroid
 
 lxc.init_cmd = /init
 
-lxc.aa_profile = unconfined
+# Security configuration is generated dynamically based on available security modules
+# See generate_security_config() in tools/helpers/lxc.py
 lxc.seccomp = /var/lib/waydroid/lxc/waydroid/waydroid.seccomp
 
 lxc.network.type = veth

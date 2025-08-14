@@ -1,6 +1,7 @@
 lxc.uts.name = waydroid
 
-lxc.apparmor.profile = unconfined
+# Security configuration is generated dynamically based on available security modules
+# See generate_security_config() in tools/helpers/lxc.py
 lxc.seccomp.profile = /var/lib/waydroid/lxc/waydroid/waydroid.seccomp
 
 lxc.no_new_privs = 1

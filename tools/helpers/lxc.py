@@ -32,6 +32,112 @@ def add_node_entry(nodes, src, dist, mnt_type, options, check):
     nodes.append(entry)
     return True
 
+def is_selinux_enabled():
+    """Check if SELinux is available and enabled"""
+    try:
+        # Check kernel support
+        if not os.path.exists("/sys/fs/selinux"):
+            logging.debug("SELinux: /sys/fs/selinux not found")
+            return False
+        
+        # Check if SELinux is running (not just compiled in)
+        with open("/sys/fs/selinux/status", "r") as f:
+            status = f.read().strip()
+        
+        # Check if enforce file exists (indicates active SELinux)
+        if not os.path.exists("/sys/fs/selinux/enforce"):
+            logging.debug("SELinux: /sys/fs/selinux/enforce not found")
+            return False
+            
+        logging.debug(f"SELinux: status={status}, enforce file exists")
+        return status == "enabled"
+    except Exception as e:
+        logging.debug(f"SELinux detection error: {e}")
+        return False
+
+def is_apparmor_enabled():
+    """Check if AppArmor is available and enabled"""
+    try:
+        # Check kernel support
+        if not os.path.exists("/sys/kernel/security/apparmor"):
+            logging.debug("AppArmor: /sys/kernel/security/apparmor not found")
+            return False
+        
+        # Check if profiles are loaded
+        with open("/sys/kernel/security/apparmor/profiles", "r") as f:
+            profiles = f.read().strip()
+        
+        # Check if securityfs is mounted
+        if not os.path.exists("/sys/kernel/security/apparmor/version"):
+            logging.debug("AppArmor: /sys/kernel/security/apparmor/version not found")
+            return False
+            
+        logging.debug(f"AppArmor: profiles loaded={len(profiles) > 0}, version file exists")
+        return len(profiles) > 0
+    except Exception as e:
+        logging.debug(f"AppArmor detection error: {e}")
+        return False
+
+def get_security_module():
+    """
+    Determine active security module with clear priority:
+    1. SELinux (if enabled - enforcing or permissive)
+    2. AppArmor (if enabled)
+    3. None (unconfined)
+    """
+    # Check SELinux first (highest priority)
+    selinux_status = is_selinux_enabled()
+    apparmor_status = is_apparmor_enabled()
+    
+    logging.info(f"Security detection: SELinux={selinux_status}, AppArmor={apparmor_status}")
+    
+    if selinux_status:
+        logging.info("Using SELinux security module")
+        return "selinux"
+    
+    # Check AppArmor second
+    if apparmor_status:
+        logging.info("Using AppArmor security module")
+        return "apparmor"
+    
+    # Default to no security
+    logging.info("No security module detected, running unconfined")
+    return "none"
+
+def generate_security_config():
+    """Generate security configuration based on active module"""
+    try:
+        security_module = get_security_module()
+        
+        if security_module == "selinux":
+            return [
+                "# SELinux configuration",
+                "lxc.selinux.context = system_u:system_r:waydroid_t:s0",
+                "lxc.selinux.allow_nesting = 1",
+                "# AppArmor disabled - using SELinux"
+            ]
+        
+        elif security_module == "apparmor":
+            return [
+                "# AppArmor configuration", 
+                "lxc.apparmor.profile = unconfined",
+                "# SELinux disabled - using AppArmor"
+            ]
+        
+        else:  # security_module == "none"
+            return [
+                "# No security module - running unconfined",
+                "# lxc.apparmor.profile = unconfined",
+                "# lxc.selinux.context = ..."
+            ]
+    except Exception as e:
+        logging.warning(f"Security configuration generation failed: {e}, using unconfined mode")
+        return [
+            "# Security detection failed - running unconfined",
+            "# lxc.apparmor.profile = unconfined",
+            "# lxc.selinux.context = ..."
+        ]
+
 def generate_nodes_lxc_config(args):
     nodes = []
     def make_entry(src, dist=None, mnt_type="none", options="bind,create=file,optional 0 0", check=True):
@@ -118,6 +224,10 @@ def generate_nodes_lxc_config(args):
 
     # NFC config
     make_entry("/system/etc/libnfc-nci.conf", options="bind,optional 0 0")
+
+    # Add security configuration
+    security_config = generate_security_config()
+    nodes.extend(security_config)
 
     return nodes
 

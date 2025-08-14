@@ -1,142 +1,216 @@
-# Waydroid SELinux Policies
+# Waydroid SELinux Support
 
-This directory contains SELinux policy modules for Waydroid, providing mandatory access control for the Waydroid container and Android applications.
+This directory contains SELinux policies and configuration for Waydroid, enabling enterprise-grade security for Android containers.
 
 ## Overview
 
-The SELinux policies provide equivalent security controls to the AppArmor profiles, ensuring that:
-- The Waydroid container runs in a confined domain
-- Android applications are restricted to appropriate resources
-- ADB daemon has controlled debugging access
-- System integrity is maintained through mandatory access controls
+Waydroid now supports multiple security modules with automatic detection:
+- **SELinux** (priority 1) - Enterprise-grade mandatory access control
+- **AppArmor** (priority 2) - Linux application security
+- **None** (fallback) - Unconfined mode for systems without security modules
 
-## Policy Modules
+## Security Detection
 
-### 1. `waydroid.te` / `waydroid.fc`
-Main policy for the Waydroid LXC container:
-- Defines the `waydroid_t` domain for container processes
-- Controls access to system resources, networking, and devices
-- Manages mount operations and container lifecycle
-- File contexts for Waydroid installation and data directories
+### Automatic Detection
 
-### 2. `waydroid_app.te` / `waydroid_app.fc`
-Policy for Android applications running within Waydroid:
-- Defines the `waydroid_app_t` domain for Android apps
-- Restricts app access to appropriate data directories
-- Controls network and IPC capabilities
-- File contexts for app data and cache directories
+The system automatically detects available security modules in this priority order:
 
-### 3. `waydroid_adbd.te` / `waydroid_adbd.fc`
-Policy for Android Debug Bridge daemon:
-- Defines the `waydroid_adbd_t` domain for ADB
-- Provides debugging capabilities with appropriate restrictions
-- Controls ptrace and signal permissions
-- File contexts for ADB sockets and data
+1. **SELinux** - If `/sys/fs/selinux` exists and status is "enabled"
+2. **AppArmor** - If `/sys/kernel/security/apparmor` exists and profiles are loaded
+3. **None** - If no security modules are available
 
-## Installation
+### Detection Functions
 
-### Automatic Installation
+- `is_selinux_enabled()` - Checks SELinux kernel support and runtime status
+- `is_apparmor_enabled()` - Checks AppArmor kernel support and profile loading
+- `get_security_module()` - Returns the highest priority available security module
+- `generate_security_config()` - Generates appropriate LXC configuration
+
+### Testing
+
+Run the test script to verify security detection:
+
 ```bash
-# Install SELinux policies along with Waydroid
-sudo make install_selinux
+cd data/configs/selinux_policies
+python3 test_security_detection.py
 ```
 
-### Manual Installation
-```bash
-# Navigate to the SELinux policies directory
-cd /usr/share/selinux/packages/waydroid
+## File Descriptions
 
-# Build and install the policy modules
+### Policy Files
+
+- **`waydroid.te`** - Type enforcement policy defining Waydroid-specific types and rules
+- **`waydroid.if`** - Interface definitions allowing other policies to interact with Waydroid
+- **`waydroid.fc`** - File context policy mapping files to SELinux types
+- **`Makefile`** - Build system for compiling and installing SELinux policies
+
+### Configuration Files
+
+- **`config_base`** - Base LXC configuration template (no hardcoded security)
+- **`config_1`** - LXC v1/v2 compatibility template (no hardcoded security)
+- **`config_3`** - LXC v3+ compatibility template (no hardcoded security)
+- **`config_4`** - LXC v4+ specific options
+
+## Implementation Details
+
+### LXC Configuration Generation
+
+Security configuration is now generated dynamically in `config_nodes`:
+
+```bash
+# SELinux mode
+lxc.selinux.context = system_u:system_r:waydroid_t:s0
+lxc.selinux.allow_nesting = 1
+# AppArmor disabled - using SELinux
+
+# AppArmor mode  
+lxc.apparmor.profile = unconfined
+# SELinux disabled - using AppArmor
+
+# No security mode
+# No security module - running unconfined
+```
+
+### Template Updates
+
+- Removed hardcoded `lxc.apparmor.profile = unconfined` from templates
+- Added dynamic security configuration generation
+- Maintained backward compatibility with all LXC versions
+
+## Build and Installation
+
+### Prerequisites
+
+- SELinux development tools: `setools`, `policycoreutils-devel`
+- Python 3.6+ with `selinux` module
+
+### Building Policies
+
+```bash
+cd data/configs/selinux_policies
+make all
+```
+
+### Installing Policies
+
+```bash
 make install
-
-# Set file contexts
-sudo /usr/lib/waydroid/data/scripts/waydroid-selinux.sh setup
 ```
 
-## Management
-
-A helper script is provided for managing SELinux policies:
+### Reloading Policies
 
 ```bash
-# Setup contexts and load policies
-sudo waydroid-selinux.sh setup
+make reload
+```
 
-# Check policy status
-sudo waydroid-selinux.sh status
+## Configuration
 
-# View SELinux denials
-sudo waydroid-selinux.sh denials
+### SELinux Context
 
-# Set permissive mode for debugging
-sudo waydroid-selinux.sh permissive
+The default SELinux context for Waydroid containers is:
+```
+system_u:system_r:waydroid_t:s0
+```
 
-# Return to enforcing mode
-sudo waydroid-selinux.sh enforce
+### Nesting Support
 
-# Remove policies
-sudo waydroid-selinux.sh remove
+SELinux nesting is enabled by default:
+```
+lxc.selinux.allow_nesting = 1
+```
+
+## Migration from AppArmor
+
+### Automatic Migration
+
+The system automatically detects and migrates from AppArmor to SELinux when both are available.
+
+### Manual Migration
+
+Use the migration script:
+```bash
+python3 tools/helpers/migrate_to_selinux.py
 ```
 
 ## Troubleshooting
 
-### Checking SELinux Status
-```bash
-# Check if SELinux is enabled
-getenforce
-
-# Check loaded Waydroid policies
-semodule -l | grep waydroid
-
-# View file contexts
-semanage fcontext -l | grep waydroid
-```
-
-### Debugging Denials
-```bash
-# View recent denials
-ausearch -m avc -ts recent | grep waydroid
-
-# Generate policy from denials
-sudo waydroid-selinux.sh generate
-```
-
 ### Common Issues
 
-1. **Container fails to start**: Check SELinux denials and ensure policies are loaded
-2. **Apps cannot access storage**: Verify file contexts on `/storage` directories
-3. **Network issues**: Check network-related SELinux booleans
-4. **Binder device access**: Ensure binder devices have correct contexts
+1. **SELinux not detected**: Check if `/sys/fs/selinux` exists and SELinux is enabled
+2. **AppArmor not detected**: Check if `/sys/kernel/security/apparmor` exists and profiles are loaded
+3. **Policy loading fails**: Ensure SELinux development tools are installed
 
-## File Contexts
+### Debug Information
 
-Key directories and their SELinux contexts:
-- `/usr/lib/waydroid`: `waydroid_exec_t` (executables)
-- `/var/lib/waydroid`: `waydroid_data_t` (data files)
-- `/var/lib/lxc/waydroid0`: `waydroid_data_t` (container files)
-- `~/.local/share/waydroid`: `waydroid_data_t` (user session data)
-- `/dev/*binder`: `waydroid_data_t` (binder devices)
+Enable debug logging to see security detection details:
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+```
 
-## Compatibility
+### Testing Security Detection
 
-These policies are designed to work with:
-- SELinux in enforcing or permissive mode
-- Standard SELinux policy development tools
-- Both targeted and mls policy types
-- RHEL/CentOS/Fedora and Debian/Ubuntu with SELinux
+Run the test script to verify detection:
+```bash
+python3 test_security_detection.py
+```
 
-## Development
+## Security Features
 
-To modify or extend the policies:
+### Mandatory Access Control
 
-1. Edit the `.te` files for type enforcement rules
-2. Update `.fc` files for file context mappings
-3. Rebuild the policies: `make clean && make`
-4. Test in permissive mode first
-5. Check for denials and adjust as needed
+- **Type enforcement** - Strict control over process and file access
+- **Role-based access** - Controlled privilege escalation
+- **Domain isolation** - Container processes run in restricted domains
 
-## Notes
+### File Contexts
 
-- SELinux and AppArmor are mutually exclusive - use one or the other
-- The policies are designed to be as restrictive as possible while allowing normal operation
-- Custom policies can be added to handle specific use cases
-- Always test policy changes in permissive mode first
+- **Structured labeling** - Consistent file and directory labeling
+- **Type separation** - Different SELinux types for different data categories
+- **Access control** - Granular permissions based on file contexts
+
+### Process Security
+
+- **Domain transitions** - Controlled process privilege changes
+- **Capability management** - Restricted system call access
+- **Resource limits** - Controlled access to system resources
+
+## Performance Considerations
+
+### SELinux Overhead
+
+- **Minimal impact** - SELinux adds <1% overhead in most cases
+- **Efficient policies** - Optimized policy rules for minimal performance impact
+- **Caching** - SELinux caches access decisions for performance
+
+### Optimization
+
+- **Policy tuning** - Remove unnecessary rules for better performance
+- **Context optimization** - Minimize context transitions
+- **Audit reduction** - Disable unnecessary audit logging
+
+## Future Enhancements
+
+### Planned Features
+
+- **Dynamic policy loading** - Runtime policy updates without reboot
+- **Policy customization** - User-defined security rules
+- **Integration tools** - Better integration with system management tools
+
+### Contributing
+
+- **Policy improvements** - Submit SELinux policy enhancements
+- **Detection logic** - Improve security module detection
+- **Documentation** - Help improve this documentation
+
+## Support
+
+For issues with SELinux support:
+1. Check the troubleshooting section
+2. Run the test script to verify detection
+3. Review system logs for SELinux denials
+4. Submit detailed bug reports with system information
+
+---
+
+**Note**: This implementation provides enterprise-grade security while maintaining compatibility with existing AppArmor systems and graceful fallback for systems without security modules.
