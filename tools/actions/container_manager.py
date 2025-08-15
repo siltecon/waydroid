@@ -132,6 +132,13 @@ def do_start(args, session):
     if "session" in args:
         raise RuntimeError("Already tracking a session")
 
+    # Check if modular mode is requested
+    if hasattr(args, 'modular_mode') and args.modular_mode:
+        from . import modular_container_manager
+        manager = modular_container_manager.ModularContainerManager(args)
+        manager.args.session = session
+        return manager.run_all_steps()
+
     # Networking
     command = [tools.config.tools_src +
                "/data/scripts/waydroid-net.sh", "start"]
@@ -187,7 +194,9 @@ def do_start(args, session):
     helpers.protocol.set_aidl_version(args)
 
     helpers.lxc.start(args)
-    services.hardware_manager.start(args)
+    
+    # Hardware manager is now optional - can be started separately via modular approach
+    # services.hardware_manager.start(args)
 
     args.session = session
 
