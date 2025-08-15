@@ -11,6 +11,9 @@ import gbinder
 import tools.config
 import tools.helpers.run
 
+# Constants for LXC configuration
+LXC_APPARMOR_PROFILE = "waydroid"
+
 def get_lxc_version(args):
     if shutil.which("lxc-info") is not None:
         command = ["lxc-info", "--version"]
@@ -65,6 +68,10 @@ def is_selinux_enabled():
     except Exception as e:
         logging.debug(f"SELinux detection error: {e}")
         return False
+
+def get_apparmor_status(args):
+    """Check if AppArmor is available and enabled (compatibility function)"""
+    return is_apparmor_enabled()
 
 def is_apparmor_enabled():
     """Check if AppArmor is available and enabled using multiple methods"""
@@ -130,6 +137,49 @@ def get_security_module():
     logging.info("No security module detected, running unconfined")
     return "none"
 
+def set_lxc_config(args):
+    """Set up LXC configuration with version-aware config selection"""
+    lxc_path = tools.config.defaults["lxc"] + "/waydroid"
+    lxc_ver = get_lxc_version(args)
+    if lxc_ver == 0:
+        raise OSError("LXC is not installed")
+    config_paths = tools.config.tools_src + "/data/configs/config_"
+    seccomp_profile = tools.config.tools_src + "/data/configs/waydroid.seccomp"
+
+    config_snippets = [ config_paths + "base" ]
+    # lxc v1 and v2 are bit special because some options got renamed later
+    if lxc_ver <= 2:
+        config_snippets.append(config_paths + "1")
+    else:
+        for ver in range(3, 5):
+            snippet = config_paths + str(ver)
+            if lxc_ver >= ver and os.path.exists(snippet):
+                config_snippets.append(snippet)
+
+    command = ["mkdir", "-p", lxc_path]
+    tools.helpers.run.user(args, command)
+    command = ["sh", "-c", "cat {} > \"{}\"".format(' '.join('"{0}"'.format(w) for w in config_snippets), lxc_path + "/config")]
+    tools.helpers.run.user(args, command)
+    command = ["sed", "-i", "s/LXCARCH/{}/".format(platform.machine()), lxc_path + "/config"]
+    tools.helpers.run.user(args, command)
+    command = ["cp", "-fpr", seccomp_profile, lxc_path + "/waydroid.seccomp"]
+    tools.helpers.run.user(args, command)
+    if get_apparmor_status(args):
+        command = ["sed", "-i", "-E", "/lxc.aa_profile|lxc.apparmor.profile/ s/unconfined/{}/g".format(LXC_APPARMOR_PROFILE), lxc_path + "/config"]
+        tools.helpers.run.user(args, command)
+
+    nodes = generate_nodes_lxc_config(args)
+    config_nodes_tmp_path = args.work + "/config_nodes"
+    config_nodes = open(config_nodes_tmp_path, "w")
+    for node in nodes:
+        config_nodes.write(node + "\n")
+    config_nodes.close()
+    command = ["mv", config_nodes_tmp_path, lxc_path]
+    tools.helpers.run.user(args, command)
+
+    # Create empty file
+    open(os.path.join(lxc_path, "config_session"), mode="w").close()
+
 def generate_security_config():
     """Generate security configuration based on active module"""
     try:
@@ -139,7 +189,7 @@ def generate_security_config():
             return [
                 "# SELinux configuration",
                 "lxc.selinux.context = system_u:system_r:waydroid_t:s0",
-                "lxc.selinux.allow_nesting = 1",
+                "# Note: lxc.selinux.allow_nesting removed - not supported in LXC 5.0+",
                 "# AppArmor disabled - using SELinux"
             ]
         
@@ -545,6 +595,11 @@ def stop(args):
 
 def freeze(args):
     command = ["lxc-freeze", "-P", tools.config.defaults["lxc"], "-n", "waydroid"]
+    tools.helpers.run.user(args, command)
+
+def start(args):
+    command = ["lxc-start", "-P",
+               tools.config.defaults["lxc"], "-n", "waydroid"]
     tools.helpers.run.user(args, command)
 
 def unfreeze(args):
