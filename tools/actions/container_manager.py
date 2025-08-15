@@ -87,6 +87,36 @@ def service(args, looper):
         except Exception as e:
             logging.warning(f"Failed to manage waydroid-dbus service: {e}")
         
+        # Ensure weston-headless service is running
+        logging.verbose("Checking if weston-headless service is running...")
+        try:
+            result = subprocess.run(['systemctl', 'is-active', 'weston-headless.service'], 
+                                 capture_output=True, text=True, check=False)
+            if result.returncode == 0 and result.stdout.strip() == 'active':
+                logging.verbose("weston-headless service is already running")
+            else:
+                logging.verbose("Starting weston-headless service...")
+                subprocess.run(['systemctl', 'start', 'weston-headless.service'], check=True)
+                logging.verbose("weston-headless service started successfully")
+        except Exception as e:
+            logging.warning(f"Failed to manage weston-headless service: {e}")
+        
+        # Check Weston environment setup
+        logging.verbose("Checking Weston environment setup...")
+        try:
+            wayland_runtime = "/run/wayland"
+            if os.path.exists(wayland_runtime):
+                logging.verbose(f"Weston runtime directory exists: {wayland_runtime}")
+                # Set Weston environment variables
+                os.environ['XDG_RUNTIME_DIR'] = wayland_runtime
+                os.environ['WAYLAND_DISPLAY'] = 'wayland-0'
+                logging.spam(f"Set XDG_RUNTIME_DIR to: {os.environ['XDG_RUNTIME_DIR']}")
+                logging.spam(f"Set WAYLAND_DISPLAY to: {os.environ['WAYLAND_DISPLAY']}")
+            else:
+                logging.warning(f"Weston runtime directory not found: {wayland_runtime}")
+        except Exception as e:
+            logging.warning(f"Failed to setup Weston environment: {e}")
+        
         # Use the custom session bus from waydroid-dbus service
         waydroid_dbus_socket = "/run/waydroid/dbus/session_bus_socket"
         if os.path.exists(waydroid_dbus_socket):
