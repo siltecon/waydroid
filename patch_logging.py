@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
-# Copyright 2021 Oliver Smith
-# SPDX-License-Identifier: GPL-3.0-or-later
-# PYTHON_ARGCOMPLETE_OK
-import os
-import sys
+# Patch the logging module to add custom levels
+# This script should be run before importing any other modules
 
-# Patch the logging module to add custom levels before importing tools
-# This ensures custom logging levels are available throughout the application
+import logging
+
 def patch_logging():
     """Add custom logging levels to the logging module"""
-    import logging
     
     # SPAM level - Most detailed logging (value 5)
     logging.SPAM = 5
@@ -59,12 +55,9 @@ def patch_logging():
     logging.Logger.verbose = lambda inst, msg, *args, **kwargs: inst.log(logging.VERBOSE, msg, *args, **kwargs)
     logging.Logger.notice = lambda inst, msg, *args, **kwargs: inst.log(logging.NOTICE, msg, *args, **kwargs)
     logging.Logger.success = lambda inst, msg, *args, **kwargs: inst.log(logging.SUCCESS, msg, *args, **kwargs)
-
-# Apply the logging patch
-patch_logging()
-
-import tools
+    
+    print("✅ Logging module patched successfully!")
+    print(f"🔍 Custom levels: SPAM({logging.SPAM}), VERBOSE({logging.VERBOSE}), NOTICE({logging.NOTICE}), SUCCESS({logging.SUCCESS})")
 
 if __name__ == "__main__":
-    os.umask(0o0022)
-    sys.exit(tools.main())
+    patch_logging()
