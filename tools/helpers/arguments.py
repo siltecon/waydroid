@@ -147,6 +147,9 @@ def arguments():
     parser.add_argument("-v", "--verbose", dest="verbose",
                         action="store_true", help="write even more to the"
                         " logfiles (this may reduce performance)")
+    parser.add_argument("--ultra-verbose", dest="ultra_verbose",
+                        action="store_true", help="enable maximum possible logging"
+                        " detail (SPAM level) - extremely verbose output")
     parser.add_argument("-q", "--quiet", dest="quiet", action="store_true",
                         help="do not output any log messages")
     parser.add_argument("-w", "--wait", dest="wait_for_init", action="store_true",

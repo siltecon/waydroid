@@ -16,11 +16,14 @@ from gi.repository import GLib
 class DbusContainerManager(dbus.service.Object):
     def __init__(self, looper, bus, object_path, args):
         logging.verbose("Initializing DbusContainerManager")
+        logging.spam(f"Constructor parameters: looper={type(looper)}, bus={type(bus)}, object_path={object_path}")
         logging.verbose(f"Object path: {object_path}")
         self.args = args
         self.looper = looper
+        logging.spam("Instance variables set successfully")
         logging.verbose("Calling parent dbus.service.Object constructor...")
         dbus.service.Object.__init__(self, bus, object_path)
+        logging.spam("Parent constructor completed without errors")
         logging.verbose("DbusContainerManager initialization completed")
 
     @dbus.service.method("id.waydro.ContainerManager", in_signature='a{ss}', out_signature='', sender_keyword="sender", connection_keyword="conn")
@@ -73,13 +76,20 @@ def service(args, looper):
 
 def set_permissions(args, perm_list=None, mode="777"):
     logging.verbose("Setting permissions for device nodes")
+    logging.spam(f"Function called with: args={type(args)}, perm_list={perm_list}, mode={mode}")
+    
     def chmod(path, mode):
+        logging.spam(f"chmod function called with path={path}, mode={mode}")
         if os.path.exists(path):
             logging.verbose(f"Setting permissions {mode} on {path}")
+            logging.spam(f"Path {path} exists, proceeding with chmod")
             command = ["chmod", mode, "-R", path]
+            logging.spam(f"Executing command: {' '.join(command)}")
             tools.helpers.run.user(args, command, check=False)
+            logging.spam(f"chmod command completed for {path}")
         else:
             logging.verbose(f"Path {path} does not exist, skipping permissions")
+            logging.spam(f"Path {path} does not exist, skipping chmod operation")
 
     # Nodes list
     if not perm_list:
@@ -104,23 +114,31 @@ def set_permissions(args, perm_list=None, mode="777"):
         ]
 
         # DRM render nodes
+        logging.spam("Searching for DRM render nodes...")
         drm_nodes = glob.glob("/dev/dri/renderD*")
         logging.verbose(f"Found DRM render nodes: {drm_nodes}")
+        logging.spam(f"DRM node search pattern: /dev/dri/renderD*, found {len(drm_nodes)} nodes")
         perm_list.extend(drm_nodes)
         
         # Framebuffers
+        logging.spam("Searching for framebuffer nodes...")
         fb_nodes = glob.glob("/dev/fb*")
         logging.verbose(f"Found framebuffer nodes: {fb_nodes}")
+        logging.spam(f"Framebuffer node search pattern: /dev/fb*, found {len(fb_nodes)} nodes")
         perm_list.extend(fb_nodes)
         
         # Videos
+        logging.spam("Searching for video nodes...")
         video_nodes = glob.glob("/dev/video*")
         logging.verbose(f"Found video nodes: {video_nodes}")
+        logging.spam(f"Video node search pattern: /dev/video*, found {len(video_nodes)} nodes")
         perm_list.extend(video_nodes)
         
         # DMA-BUF Heaps
+        logging.spam("Searching for DMA-BUF heap nodes...")
         dma_nodes = glob.glob("/dev/dma_heap/*")
         logging.verbose(f"Found DMA-BUF heap nodes: {dma_nodes}")
+        logging.spam(f"DMA-BUF heap search pattern: /dev/dma_heap/*, found {len(dma_nodes)} nodes")
         perm_list.extend(dma_nodes)
 
     logging.verbose(f"Processing {len(perm_list)} device nodes for permissions")
@@ -130,10 +148,16 @@ def set_permissions(args, perm_list=None, mode="777"):
 
 def start(args):
     logging.verbose("Starting WayDroid container service")
+    logging.spam(f"start function called with args: {type(args)}")
+    logging.spam(f"args attributes: {[attr for attr in dir(args) if not attr.startswith('_')]}")
+    
     try:
+        logging.spam("Attempting to register DBus service name...")
         name = dbus.service.BusName("id.waydro.Container", dbus.SystemBus(), do_not_queue=True)
+        logging.spam(f"DBus service name registration successful: {name}")
         logging.verbose("Successfully registered DBus service name: id.waydro.Container")
     except dbus.exceptions.NameExistsException:
+        logging.spam("DBus service name already exists exception caught")
         logging.error("Container service is already running")
         return
 
@@ -145,19 +169,32 @@ def start(args):
         
         # Load binder and ashmem drivers
         logging.verbose("Loading Android drivers...")
+        logging.spam("About to load configuration...")
         cfg = tools.config.load(args)
+        logging.spam(f"Configuration loaded successfully: {type(cfg)}")
         logging.verbose(f"Loaded configuration: vendor_type={cfg['waydroid']['vendor_type']}")
+        logging.spam(f"Full configuration keys: {list(cfg.keys())}")
         
         if cfg["waydroid"]["vendor_type"] == "MAINLINE":
+            logging.spam("Vendor type is MAINLINE, proceeding with driver probing")
             logging.verbose("Probing Binder driver...")
-            if helpers.drivers.probeBinderDriver(args) != 0:
+            logging.spam("Calling helpers.drivers.probeBinderDriver...")
+            probe_result = helpers.drivers.probeBinderDriver(args)
+            logging.spam(f"Binder driver probe result: {probe_result}")
+            if probe_result != 0:
                 logging.error("Failed to load Binder driver")
+                logging.spam(f"Binder driver probe failed with exit code: {probe_result}")
             else:
                 logging.verbose("Binder driver loaded successfully")
+                logging.spam("Binder driver probe completed successfully")
             
             logging.verbose("Probing Ashmem driver...")
+            logging.spam("Calling helpers.drivers.probeAshmemDriver...")
             helpers.drivers.probeAshmemDriver(args)
+            logging.spam("Ashmem driver probe completed")
             logging.verbose("Ashmem driver loaded successfully")
+        else:
+            logging.spam(f"Vendor type is not MAINLINE: {cfg['waydroid']['vendor_type']}")
         
         logging.verbose("Loading Binder nodes...")
         helpers.drivers.loadBinderNodes(args)

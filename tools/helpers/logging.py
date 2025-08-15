@@ -35,29 +35,54 @@ class log_handler(logging.StreamHandler):
             self.handleError(record)
 
 
-def add_verbose_log_level():
+def add_maximum_log_levels():
     """
-    Add a new log level "verbose", which is below "debug". Also monkeypatch
-    logging, so it can be used with logging.verbose().
-
-    This function is based on work by Voitek Zylinski and sleepycal:
-    https://stackoverflow.com/a/20602183
-    All stackoverflow user contributions are licensed as CC-BY-SA:
-    https://creativecommons.org/licenses/by-sa/3.0/
+    Add maximum possible logging levels for ultra-detailed debugging.
+    Implements SPAM (5), VERBOSE (15), NOTICE (25), SUCCESS (35) levels.
+    
+    This provides the most granular logging possible for debugging.
     """
-    logging.VERBOSE = 5
+    # SPAM level - Most detailed logging (value 5)
+    logging.SPAM = 5
+    logging.addLevelName(logging.SPAM, "SPAM")
+    logging.Logger.spam = lambda inst, msg, * \
+        args, **kwargs: inst.log(logging.SPAM, msg, *args, **kwargs)
+    logging.spam = lambda msg, *args, **kwargs: logging.log(logging.SPAM,
+                                                           msg, *args, **kwargs)
+    
+    # VERBOSE level - Very detailed logging (value 15)
+    logging.VERBOSE = 15
     logging.addLevelName(logging.VERBOSE, "VERBOSE")
     logging.Logger.verbose = lambda inst, msg, * \
         args, **kwargs: inst.log(logging.VERBOSE, msg, *args, **kwargs)
     logging.verbose = lambda msg, *args, **kwargs: logging.log(logging.VERBOSE,
-                                                               msg, *args,
-                                                               **kwargs)
+                                                             msg, *args, **kwargs)
+    
+    # NOTICE level - Important but not critical (value 25)
+    logging.NOTICE = 25
+    logging.addLevelName(logging.NOTICE, "NOTICE")
+    logging.Logger.notice = lambda inst, msg, * \
+        args, **kwargs: inst.log(logging.NOTICE, msg, *args, **kwargs)
+    logging.notice = lambda msg, *args, **kwargs: logging.log(logging.NOTICE,
+                                                            msg, *args, **kwargs)
+    
+    # SUCCESS level - Successful operations (value 35)
+    logging.SUCCESS = 35
+    logging.addLevelName(logging.SUCCESS, "SUCCESS")
+    logging.Logger.success = lambda inst, msg, * \
+        args, **kwargs: inst.log(logging.SUCCESS, msg, *args, **kwargs)
+    logging.success = lambda msg, *args, **kwargs: logging.log(logging.SUCCESS,
+                                                             msg, *args, **kwargs)
+    
+    # Keep backward compatibility
+    logging.VERBOSE_OLD = 5
+    logging.addLevelName(logging.VERBOSE_OLD, "VERBOSE_OLD")
 
 
 def init(args):
     """
     Set log format and add the log file descriptor to args.logfd, add the
-    verbose log level.
+    maximum possible logging levels for ultra-detailed debugging.
     """
     # Set log file descriptor (logfd)
     if args.details_to_stdout:
@@ -79,23 +104,37 @@ def init(args):
                 print("WARNING: Can't create log file in '" + dir + "', path"
                       " does not exist!")
 
-    # Set log format
+    # Set log format with enhanced detail
     root_logger = logging.getLogger()
     root_logger.handlers = []
-    formatter = logging.Formatter("[%(asctime)s] %(message)s",
-                                  datefmt="%H:%M:%S")
+    
+    # Enhanced formatter with more detail
+    formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s",
+                                  datefmt="%H:%M:%S.%f")
 
-    # Set log level
-    add_verbose_log_level()
-    root_logger.setLevel(logging.DEBUG)
-    if args.verbose:
-        root_logger.setLevel(logging.VERBOSE)
+    # Set log level with maximum granularity
+    add_maximum_log_levels()
+    
+    # Set the most detailed logging level possible
+    if hasattr(args, 'ultra_verbose') and args.ultra_verbose:
+        root_logger.setLevel(logging.SPAM)  # Most detailed - SPAM level
+        print("🔍 ULTRA VERBOSE MODE: SPAM level logging enabled")
+    elif hasattr(args, 'verbose') and args.verbose:
+        root_logger.setLevel(logging.VERBOSE)  # Very detailed - VERBOSE level
+        print("📝 VERBOSE MODE: Detailed logging enabled")
+    else:
+        root_logger.setLevel(logging.DEBUG)  # Standard debug level
+        print("🐛 DEBUG MODE: Standard debug logging enabled")
 
     # Add a custom log handler
     handler = log_handler()
     log_handler._args = args
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)
+    
+    # Log the logging configuration
+    logging.success("Maximum logging system initialized successfully")
+    logging.spam(f"Log levels available: SPAM({logging.SPAM}), VERBOSE({logging.VERBOSE}), NOTICE({logging.NOTICE}), SUCCESS({logging.SUCCESS}), DEBUG({logging.DEBUG})")
 
 
 def disable():

@@ -25,18 +25,27 @@ def main():
     args = None
     try:
         logging.verbose("Waydroid main function started")
+        logging.spam("Main function execution begins")
         
         # Parse arguments, set up logging
         logging.verbose("Parsing command line arguments...")
+        logging.spam("About to call helpers.arguments()...")
         args = helpers.arguments()
+        logging.spam(f"Arguments parsed successfully: {type(args)}")
         logging.verbose(f"Action: {args.action}, Subaction: {getattr(args, 'subaction', 'N/A')}")
+        logging.spam(f"All argument attributes: {[attr for attr in dir(args) if not attr.startswith('_')]}")
         
         args.cache = {}
+        logging.spam("Setting up configuration paths...")
         args.work = config.defaults["work"]
+        logging.spam(f"Work directory from config: {args.work}")
         args.config = args.work + "/waydroid.cfg"
+        logging.spam(f"Config file path constructed: {args.config}")
         args.log = args.work + "/waydroid.log"
+        logging.spam(f"Log file path constructed: {args.log}")
         args.sudo_timer = True
         args.timeout = 1800
+        logging.spam(f"Timer settings: sudo_timer={args.sudo_timer}, timeout={args.timeout}")
         
         logging.verbose(f"Work directory: {args.work}")
         logging.verbose(f"Config file: {args.config}")
@@ -66,7 +75,9 @@ def main():
         dbus_name_scope = None
 
         logging.verbose("Checking if Waydroid is initialized...")
+        logging.spam("About to call actions.initializer.is_initialized...")
         is_initialized = actions.initializer.is_initialized(args)
+        logging.spam(f"Initialization check completed, result: {is_initialized}")
         logging.verbose(f"Initialization status: {is_initialized}")
         
         if not is_initialized and \
