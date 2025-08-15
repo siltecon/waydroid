@@ -67,12 +67,64 @@ class DbusContainerManager(dbus.service.Object):
 
 def service(args, looper):
     logging.verbose("Starting DBus container manager service")
+    logging.spam(f"Service function called with args: {type(args)}, looper: {type(looper)}")
+    
     logging.verbose("Creating DbusContainerManager object...")
-    dbus_obj = DbusContainerManager(looper, dbus.SystemBus(), '/ContainerManager', args)
-    logging.verbose("DBus container manager service created successfully")
+    logging.spam("About to create DBus system bus...")
+    try:
+        bus = dbus.SystemBus()
+        logging.spam(f"DBus system bus created successfully: {type(bus)}")
+    except Exception as e:
+        logging.error(f"Failed to create DBus system bus: {e}")
+        raise
+    
+    logging.spam("About to create DbusContainerManager object...")
+    try:
+        dbus_obj = DbusContainerManager(looper, bus, '/ContainerManager', args)
+        logging.spam(f"DbusContainerManager object created successfully: {type(dbus_obj)}")
+        logging.verbose("DBus container manager service created successfully")
+    except Exception as e:
+        logging.error(f"Failed to create DbusContainerManager: {e}")
+        raise
+    
     logging.verbose("Starting main loop...")
-    looper.run()
-    logging.verbose("Main loop exited")
+    logging.spam("About to call looper.run() - this is where the hang might occur")
+    logging.spam(f"Looper type: {type(looper)}, Looper object: {looper}")
+    
+    try:
+        logging.spam("Calling looper.run() - entering main loop...")
+        
+        # Add a timeout mechanism to prevent infinite hangs
+        import threading
+        import time
+        
+        def timeout_handler():
+            logging.warning("Main loop timeout reached - forcing exit")
+            logging.spam("Timeout handler called after 30 seconds")
+            try:
+                looper.quit()
+            except Exception as e:
+                logging.error(f"Failed to quit looper: {e}")
+                os._exit(1)
+        
+        # Start timeout timer
+        timeout_timer = threading.Timer(30.0, timeout_handler)
+        timeout_timer.start()
+        logging.spam("Timeout timer started (30 seconds)")
+        
+        try:
+            looper.run()
+            logging.spam("looper.run() completed - main loop exited normally")
+            logging.verbose("Main loop exited")
+        finally:
+            # Cancel timeout timer if we exit normally
+            timeout_timer.cancel()
+            logging.spam("Timeout timer cancelled")
+            
+    except Exception as e:
+        logging.error(f"Exception in main loop: {e}")
+        logging.spam(f"Exception type: {type(e)}")
+        raise
 
 def set_permissions(args, perm_list=None, mode="777"):
     logging.verbose("Setting permissions for device nodes")
@@ -150,6 +202,17 @@ def start(args):
     logging.verbose("Starting WayDroid container service")
     logging.spam(f"start function called with args: {type(args)}")
     logging.spam(f"args attributes: {[attr for attr in dir(args) if not attr.startswith('_')]}")
+    
+    # Set up signal handlers for graceful shutdown
+    def signal_handler(signum, frame):
+        logging.verbose(f"Received signal {signum}, shutting down gracefully...")
+        logging.spam(f"Signal frame: {frame}")
+        sys.exit(0)
+    
+    logging.spam("Setting up signal handlers...")
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    logging.spam("Signal handlers configured")
     
     try:
         logging.spam("Attempting to register DBus service name...")
