@@ -15,9 +15,13 @@ from gi.repository import GLib
 
 class DbusContainerManager(dbus.service.Object):
     def __init__(self, looper, bus, object_path, args):
+        logging.verbose("Initializing DbusContainerManager")
+        logging.verbose(f"Object path: {object_path}")
         self.args = args
         self.looper = looper
+        logging.verbose("Calling parent dbus.service.Object constructor...")
         dbus.service.Object.__init__(self, bus, object_path)
+        logging.verbose("DbusContainerManager initialization completed")
 
     @dbus.service.method("id.waydro.ContainerManager", in_signature='a{ss}', out_signature='', sender_keyword="sender", connection_keyword="conn")
     def Start(self, session, sender, conn):
@@ -32,37 +36,54 @@ class DbusContainerManager(dbus.service.Object):
 
     @dbus.service.method("id.waydro.ContainerManager", in_signature='b', out_signature='')
     def Stop(self, quit_session):
+        logging.verbose(f"DBus Stop method called with quit_session={quit_session}")
         stop(self.args, quit_session)
 
     @dbus.service.method("id.waydro.ContainerManager", in_signature='', out_signature='')
     def Freeze(self):
+        logging.verbose("DBus Freeze method called")
         freeze(self.args)
 
     @dbus.service.method("id.waydro.ContainerManager", in_signature='', out_signature='')
     def Unfreeze(self):
+        logging.verbose("DBus Unfreeze method called")
         unfreeze(self.args)
 
     @dbus.service.method("id.waydro.ContainerManager", in_signature='', out_signature='a{ss}')
     def GetSession(self):
+        logging.verbose("DBus GetSession method called")
         try:
             session = self.args.session
+            logging.verbose(f"Retrieved session: {session}")
             session["state"] = helpers.lxc.status(self.args)
+            logging.verbose(f"Updated session state: {session['state']}")
             return session
         except AttributeError:
+            logging.verbose("No session found, returning empty dict")
             return {}
 
 def service(args, looper):
+    logging.verbose("Starting DBus container manager service")
+    logging.verbose("Creating DbusContainerManager object...")
     dbus_obj = DbusContainerManager(looper, dbus.SystemBus(), '/ContainerManager', args)
+    logging.verbose("DBus container manager service created successfully")
+    logging.verbose("Starting main loop...")
     looper.run()
+    logging.verbose("Main loop exited")
 
 def set_permissions(args, perm_list=None, mode="777"):
+    logging.verbose("Setting permissions for device nodes")
     def chmod(path, mode):
         if os.path.exists(path):
+            logging.verbose(f"Setting permissions {mode} on {path}")
             command = ["chmod", mode, "-R", path]
             tools.helpers.run.user(args, command, check=False)
+        else:
+            logging.verbose(f"Path {path} does not exist, skipping permissions")
 
     # Nodes list
     if not perm_list:
+        logging.verbose("Using default permission list for device nodes")
         perm_list = [
             "/dev/ashmem",
 
@@ -83,183 +104,342 @@ def set_permissions(args, perm_list=None, mode="777"):
         ]
 
         # DRM render nodes
-        perm_list.extend(glob.glob("/dev/dri/renderD*"))
+        drm_nodes = glob.glob("/dev/dri/renderD*")
+        logging.verbose(f"Found DRM render nodes: {drm_nodes}")
+        perm_list.extend(drm_nodes)
+        
         # Framebuffers
-        perm_list.extend(glob.glob("/dev/fb*"))
+        fb_nodes = glob.glob("/dev/fb*")
+        logging.verbose(f"Found framebuffer nodes: {fb_nodes}")
+        perm_list.extend(fb_nodes)
+        
         # Videos
-        perm_list.extend(glob.glob("/dev/video*"))
+        video_nodes = glob.glob("/dev/video*")
+        logging.verbose(f"Found video nodes: {video_nodes}")
+        perm_list.extend(video_nodes)
+        
         # DMA-BUF Heaps
-        perm_list.extend(glob.glob("/dev/dma_heap/*"))
+        dma_nodes = glob.glob("/dev/dma_heap/*")
+        logging.verbose(f"Found DMA-BUF heap nodes: {dma_nodes}")
+        perm_list.extend(dma_nodes)
 
+    logging.verbose(f"Processing {len(perm_list)} device nodes for permissions")
     for path in perm_list:
         chmod(path, mode)
+    logging.verbose("Device node permissions setup completed")
 
 def start(args):
+    logging.verbose("Starting WayDroid container service")
     try:
         name = dbus.service.BusName("id.waydro.Container", dbus.SystemBus(), do_not_queue=True)
+        logging.verbose("Successfully registered DBus service name: id.waydro.Container")
     except dbus.exceptions.NameExistsException:
         logging.error("Container service is already running")
         return
 
     status = helpers.lxc.status(args)
+    logging.verbose(f"Current container status: {status}")
+    
     if status == "STOPPED":
+        logging.verbose("Container is stopped, proceeding with startup sequence")
+        
         # Load binder and ashmem drivers
+        logging.verbose("Loading Android drivers...")
         cfg = tools.config.load(args)
+        logging.verbose(f"Loaded configuration: vendor_type={cfg['waydroid']['vendor_type']}")
+        
         if cfg["waydroid"]["vendor_type"] == "MAINLINE":
+            logging.verbose("Probing Binder driver...")
             if helpers.drivers.probeBinderDriver(args) != 0:
                 logging.error("Failed to load Binder driver")
+            else:
+                logging.verbose("Binder driver loaded successfully")
+            
+            logging.verbose("Probing Ashmem driver...")
             helpers.drivers.probeAshmemDriver(args)
+            logging.verbose("Ashmem driver loaded successfully")
+        
+        logging.verbose("Loading Binder nodes...")
         helpers.drivers.loadBinderNodes(args)
+        
+        logging.verbose("Setting up binder device permissions...")
         set_permissions(args, [
             "/dev/" + args.BINDER_DRIVER,
             "/dev/" + args.VNDBINDER_DRIVER,
             "/dev/" + args.HWBINDER_DRIVER
         ], "666")
 
+        logging.verbose("Setting up signal handlers...")
         mainloop = GLib.MainLoop()
 
         def sigint_handler(data):
+            logging.verbose("Received SIGINT signal, stopping container")
             stop(args)
             mainloop.quit()
 
         GLib.unix_signal_add(GLib.PRIORITY_HIGH, signal.SIGINT, sigint_handler, None)
         GLib.unix_signal_add(GLib.PRIORITY_HIGH, signal.SIGTERM, sigint_handler, None)
+        logging.verbose("Signal handlers configured")
+        
+        logging.verbose("Starting container service...")
         service(args, mainloop)
     else:
         logging.error("WayDroid container is {}".format(status))
 
 def do_start(args, session):
+    logging.verbose("Starting WayDroid container with session")
+    logging.verbose(f"Session details: user_id={session.get('user_id', 'N/A')}, pid={session.get('pid', 'N/A')}")
+    
     if "session" in args:
+        logging.error("Already tracking a session, cannot start another")
         raise RuntimeError("Already tracking a session")
 
     # Networking
+    logging.verbose("Setting up networking...")
     command = [tools.config.tools_src +
                "/data/scripts/waydroid-net.sh", "start"]
+    logging.verbose(f"Running networking command: {' '.join(command)}")
     tools.helpers.run.user(args, command)
+    logging.verbose("Networking setup completed")
 
     # Sensors
+    logging.verbose("Setting up sensors...")
     if which("waydroid-sensord"):
+        logging.verbose("waydroid-sensord found, starting sensor daemon")
+        command = ["waydroid-sensord", "/dev/" + args.HWBINDER_DRIVER]
+        logging.verbose(f"Starting sensor daemon with command: {' '.join(command)}")
         tools.helpers.run.user(
-            args, ["waydroid-sensord", "/dev/" + args.HWBINDER_DRIVER], output="background")
+            args, command, output="background")
+        logging.verbose("Sensor daemon started successfully")
+    else:
+        logging.verbose("waydroid-sensord not found, skipping sensor setup")
 
     # Cgroup hacks
+    logging.verbose("Setting up cgroup management...")
     if which("start"):
+        logging.verbose("Legacy 'start' command found, starting cgroup-lite")
         command = ["start", "cgroup-lite"]
+        logging.verbose(f"Running cgroup command: {' '.join(command)}")
         tools.helpers.run.user(args, command, check=False)
+        logging.verbose("Cgroup-lite started")
+    else:
+        logging.verbose("Legacy 'start' command not found, skipping cgroup-lite")
 
     # Keep schedtune around in case nesting is supported
+    logging.verbose("Checking schedtune cgroup nesting support...")
     if os.path.ismount("/sys/fs/cgroup/schedtune"):
+        logging.verbose("schedtune cgroup is mounted, testing nesting capability")
         try:
+            logging.verbose("Creating test directories for nesting test")
             os.mkdir("/sys/fs/cgroup/schedtune/probe0")
             os.mkdir("/sys/fs/cgroup/schedtune/probe0/probe1")
-        except:
+            logging.verbose("Nesting test directories created successfully")
+        except Exception as e:
+            logging.verbose(f"Nesting test failed: {e}, unmounting schedtune")
             command = ["umount", "-l", "/sys/fs/cgroup/schedtune"]
             tools.helpers.run.user(args, command, check=False)
+            logging.verbose("schedtune cgroup unmounted")
         finally:
+            logging.verbose("Cleaning up test directories")
             if os.path.exists("/sys/fs/cgroup/schedtune/probe0/probe1"):
                 os.rmdir("/sys/fs/cgroup/schedtune/probe0/probe1")
             if os.path.exists("/sys/fs/cgroup/schedtune/probe0"):
                 os.rmdir("/sys/fs/cgroup/schedtune/probe0")
+            logging.verbose("Test directories cleaned up")
+    else:
+        logging.verbose("schedtune cgroup not mounted, skipping nesting test")
 
     #TODO: remove NFC hacks
+    logging.verbose("Managing NFC service to prevent conflicts...")
     if which("stop"):
+        logging.verbose("Legacy 'stop' command found, stopping nfcd")
         command = ["stop", "nfcd"]
+        logging.verbose(f"Running NFC stop command: {' '.join(command)}")
         tools.helpers.run.user(args, command, check=False)
+        logging.verbose("NFC service stopped via legacy command")
     elif which("systemctl") and (tools.helpers.run.user(args, ["systemctl", "is-active", "-q", "nfcd"], check=False) == 0):
+        logging.verbose("systemctl found and nfcd is active, stopping via systemctl")
         command = ["systemctl", "stop", "nfcd"]
+        logging.verbose(f"Running systemctl stop command: {' '.join(command)}")
         tools.helpers.run.user(args, command, check=False)
+        logging.verbose("NFC service stopped via systemctl")
+    else:
+        logging.verbose("No suitable method found to stop NFC service")
 
     # Set permissions
+    logging.verbose("Setting up device permissions...")
     set_permissions(args)
+    logging.verbose("Device permissions configured")
 
     # Create session-specific LXC config file
+    logging.verbose("Generating session-specific LXC configuration...")
     helpers.lxc.generate_session_lxc_config(args, session)
+    logging.verbose("LXC configuration generated")
+    
     # Backwards compatibility
+    logging.verbose("Checking for backwards compatibility mounts...")
     with open(tools.config.defaults["lxc"] + "/waydroid/config") as f:
         if "config_session" not in f.read():
+            logging.verbose("Binding waydroid data for backwards compatibility")
             helpers.mount.bind(args, session["waydroid_data"],
                                tools.config.defaults["data"])
+            logging.verbose("Backwards compatibility mount configured")
+        else:
+            logging.verbose("Backwards compatibility mount not needed")
 
     # Mount rootfs
+    logging.verbose("Mounting Android rootfs...")
     cfg = tools.config.load(args)
+    logging.verbose(f"Mounting rootfs from: {cfg['waydroid']['images_path']}")
     helpers.images.mount_rootfs(args, cfg["waydroid"]["images_path"], session)
+    logging.verbose("Android rootfs mounted successfully")
 
+    logging.verbose("Setting AIDL protocol version...")
     helpers.protocol.set_aidl_version(args)
+    logging.verbose("AIDL protocol version configured")
 
+    logging.verbose("Starting LXC container...")
     helpers.lxc.start(args)
+    logging.verbose("LXC container started successfully")
+
+    logging.verbose("Starting hardware manager service...")
     services.hardware_manager.start(args)
+    logging.verbose("Hardware manager service started")
 
     args.session = session
+    logging.verbose("Session tracking enabled")
+    logging.verbose("Container startup sequence completed successfully")
 
 def stop(args, quit_session=True):
+    logging.verbose("Stopping WayDroid container")
     try:
+        logging.verbose("Stopping hardware manager service...")
         services.hardware_manager.stop(args)
+        logging.verbose("Hardware manager service stopped")
+        
         status = helpers.lxc.status(args)
+        logging.verbose(f"Current container status: {status}")
+        
         if status != "STOPPED":
+            logging.verbose("Container is not stopped, stopping LXC container...")
             helpers.lxc.stop(args)
+            logging.verbose("Waiting for container to stop...")
             while helpers.lxc.status(args) != "STOPPED":
                 pass
+            logging.verbose("Container stopped successfully")
+        else:
+            logging.verbose("Container is already stopped")
 
         # Networking
+        logging.verbose("Stopping networking...")
         command = [tools.config.tools_src +
                    "/data/scripts/waydroid-net.sh", "stop"]
+        logging.verbose(f"Running networking stop command: {' '.join(command)}")
         tools.helpers.run.user(args, command, check=False)
+        logging.verbose("Networking stopped")
 
         #TODO: remove NFC hacks
+        logging.verbose("Restarting NFC service...")
         if which("start"):
+            logging.verbose("Legacy 'start' command found, starting nfcd")
             command = ["start", "nfcd"]
+            logging.verbose(f"Running NFC start command: {' '.join(command)}")
             tools.helpers.run.user(args, command, check=False)
+            logging.verbose("NFC service started via legacy command")
         elif which("systemctl") and (tools.helpers.run.user(args, ["systemctl", "is-enabled", "-q", "nfcd"], check=False) == 0):
+            logging.verbose("systemctl found and nfcd is enabled, starting via systemctl")
             command = ["systemctl", "start", "nfcd"]
+            logging.verbose(f"Running systemctl start command: {' '.join(command)}")
             tools.helpers.run.user(args, command, check=False)
+            logging.verbose("NFC service started via systemctl")
+        else:
+            logging.verbose("No suitable method found to start NFC service")
 
         # Sensors
+        logging.verbose("Stopping sensor daemon...")
         if which("waydroid-sensord"):
+            logging.verbose("waydroid-sensord found, getting PID")
             command = ["pidof", "waydroid-sensord"]
             pid = tools.helpers.run.user(args, command, check=False, output_return=True).strip()
             if pid:
+                logging.verbose(f"Found sensor daemon PID: {pid}, killing process")
                 command = ["kill", "-9", pid]
                 tools.helpers.run.user(args, command, check=False)
+                logging.verbose("Sensor daemon killed")
+            else:
+                logging.verbose("No running sensor daemon found")
+        else:
+            logging.verbose("waydroid-sensord not found, skipping sensor cleanup")
 
         # Umount rootfs
+        logging.verbose("Unmounting Android rootfs...")
         helpers.images.umount_rootfs(args)
+        logging.verbose("Android rootfs unmounted")
 
         # Backwards compatibility
+        logging.verbose("Cleaning up backwards compatibility mounts...")
         try:
             helpers.mount.umount_all(args, tools.config.defaults["data"])
-        except:
-            pass
+            logging.verbose("Backwards compatibility mounts cleaned up")
+        except Exception as e:
+            logging.verbose(f"Error cleaning up backwards compatibility mounts: {e}")
 
         if "session" in args:
             if quit_session:
+                logging.verbose("Sending SIGUSR1 to session process...")
                 try:
                     os.kill(int(args.session["pid"]), signal.SIGUSR1)
-                except:
-                    pass
+                    logging.verbose("SIGUSR1 sent to session process")
+                except Exception as e:
+                    logging.verbose(f"Error sending SIGUSR1: {e}")
+            logging.verbose("Removing session tracking")
             del args.session
+            logging.verbose("Session tracking removed")
+        else:
+            logging.verbose("No session tracking to remove")
     except:
         pass
 
 def restart(args):
+    logging.verbose("Restarting WayDroid container")
     status = helpers.lxc.status(args)
+    logging.verbose(f"Current container status: {status}")
+    
     if status == "RUNNING":
+        logging.verbose("Container is running, stopping first...")
         helpers.lxc.stop(args)
+        logging.verbose("Container stopped, starting again...")
         helpers.lxc.start(args)
+        logging.verbose("Container restart completed")
     else:
         logging.error("WayDroid container is {}".format(status))
 
 def freeze(args):
+    logging.verbose("Freezing WayDroid container")
     status = helpers.lxc.status(args)
+    logging.verbose(f"Current container status: {status}")
+    
     if status == "RUNNING":
+        logging.verbose("Container is running, freezing...")
         helpers.lxc.freeze(args)
+        logging.verbose("Waiting for container to freeze...")
         while helpers.lxc.status(args) == "RUNNING":
             pass
+        logging.verbose("Container frozen successfully")
     else:
         logging.error("WayDroid container is {}".format(status))
 
 def unfreeze(args):
+    logging.verbose("Unfreezing WayDroid container")
     status = helpers.lxc.status(args)
+    logging.verbose(f"Current container status: {status}")
+    
     if status == "FROZEN":
+        logging.verbose("Container is frozen, unfreezing...")
         helpers.lxc.unfreeze(args)
+        logging.verbose("Waiting for container to unfreeze...")
         while helpers.lxc.status(args) == "FROZEN":
             pass
+        logging.verbose("Container unfrozen successfully")
+    else:
+        logging.verbose(f"Container is not frozen (status: {status}), nothing to unfreeze")
