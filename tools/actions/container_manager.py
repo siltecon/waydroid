@@ -70,12 +70,40 @@ def service(args, looper):
     logging.spam(f"Service function called with args: {type(args)}, looper: {type(looper)}")
     
     logging.verbose("Creating DbusContainerManager object...")
-    logging.spam("About to create DBus system bus...")
+    logging.spam("About to create DBus session bus from waydroid-dbus service...")
     try:
-        bus = dbus.SystemBus()
-        logging.spam(f"DBus system bus created successfully: {type(bus)}")
+        # Ensure waydroid-dbus service is running
+        logging.verbose("Checking if waydroid-dbus service is running...")
+        try:
+            import subprocess
+            result = subprocess.run(['systemctl', 'is-active', 'waydroid-dbus.service'], 
+                                 capture_output=True, text=True, check=False)
+            if result.returncode == 0 and result.stdout.strip() == 'active':
+                logging.verbose("waydroid-dbus service is already running")
+            else:
+                logging.verbose("Starting waydroid-dbus service...")
+                subprocess.run(['systemctl', 'start', 'waydroid-dbus.service'], check=True)
+                logging.verbose("waydroid-dbus service started successfully")
+        except Exception as e:
+            logging.warning(f"Failed to manage waydroid-dbus service: {e}")
+        
+        # Use the custom session bus from waydroid-dbus service
+        waydroid_dbus_socket = "/run/waydroid/dbus/session_bus_socket"
+        if os.path.exists(waydroid_dbus_socket):
+            logging.verbose(f"Found waydroid-dbus socket: {waydroid_dbus_socket}")
+            # Set the DBUS_SESSION_BUS_ADDRESS to use the waydroid-dbus service
+            os.environ['DBUS_SESSION_BUS_ADDRESS'] = f"unix:path={waydroid_dbus_socket}"
+            logging.spam(f"Set DBUS_SESSION_BUS_ADDRESS to: {os.environ['DBUS_SESSION_BUS_ADDRESS']}")
+            bus = dbus.SessionBus()
+            logging.spam(f"DBus session bus created successfully using waydroid-dbus: {type(bus)}")
+            logging.verbose("Using DBus session bus from waydroid-dbus service")
+        else:
+            logging.warning(f"waydroid-dbus socket not found at {waydroid_dbus_socket}, falling back to default session bus")
+            bus = dbus.SessionBus()
+            logging.spam(f"DBus session bus created successfully using default: {type(bus)}")
+            logging.verbose("Using default DBus session bus")
     except Exception as e:
-        logging.error(f"Failed to create DBus system bus: {e}")
+        logging.error(f"Failed to create DBus session bus: {e}")
         raise
     
     logging.spam("About to create DbusContainerManager object...")
