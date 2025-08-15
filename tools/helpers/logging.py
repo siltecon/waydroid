@@ -15,14 +15,31 @@ class log_handler(logging.StreamHandler):
         try:
             msg = self.format(record)
 
-            # INFO or higher: Write to stdout
+            # Display to stdout based on verbosity settings
             if (not self._args.details_to_stdout and
-                not self._args.quiet and
-                    record.levelno >= logging.INFO):
-                stream = self.stream
-                stream.write(msg)
-                stream.write(self.terminator)
-                self.flush()
+                not self._args.quiet):
+                
+                # For ultra-verbose mode, show SPAM level and above
+                if hasattr(self._args, 'ultra_verbose') and self._args.ultra_verbose:
+                    if record.levelno >= logging.SPAM:
+                        stream = self.stream
+                        stream.write(msg)
+                        stream.write(self.terminator)
+                        self.flush()
+                # For verbose mode, show VERBOSE level and above
+                elif hasattr(self._args, 'verbose') and self._args.verbose:
+                    if record.levelno >= logging.VERBOSE:
+                        stream = self.stream
+                        stream.write(msg)
+                        stream.write(self.terminator)
+                        self.flush()
+                # Default: show INFO level and above
+                else:
+                    if record.levelno >= logging.INFO:
+                        stream = self.stream
+                        stream.write(msg)
+                        stream.write(self.terminator)
+                        self.flush()
 
             # Everything: Write to logfd
             msg = "(" + str(os.getpid()).zfill(6) + ") " + msg
@@ -108,6 +125,10 @@ def init(args):
         logging.success("Maximum logging system initialized successfully")
     if hasattr(logging, 'spam'):
         logging.spam(f"Log levels available: SPAM({logging.SPAM}), VERBOSE({logging.VERBOSE}), NOTICE({logging.NOTICE}), SUCCESS({logging.SUCCESS}), DEBUG({logging.DEBUG})")
+        logging.spam(f"Root logger level set to: {root_logger.level}")
+        logging.spam(f"Root logger handlers: {len(root_logger.handlers)}")
+        logging.spam(f"Ultra-verbose mode: {getattr(args, 'ultra_verbose', False)}")
+        logging.spam(f"Verbose mode: {getattr(args, 'verbose', False)}")
 
 
 def disable():
