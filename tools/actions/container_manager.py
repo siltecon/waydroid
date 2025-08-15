@@ -26,7 +26,7 @@ class DbusContainerManager(dbus.service.Object):
         logging.spam("Parent constructor completed without errors")
         logging.verbose("DbusContainerManager initialization completed")
 
-    @dbus.service.method("id.waydro.ContainerManager", in_signature='a{ss}', out_signature='', sender_keyword="sender", connection_keyword="conn")
+    @dbus.service.method("id.waydro.Container", in_signature='a{ss}', out_signature='', sender_keyword="sender", connection_keyword="conn")
     def Start(self, session, sender, conn):
         dbus_info = dbus.Interface(conn.get_object("org.freedesktop.DBus", "/org/freedesktop/DBus/Bus", False), "org.freedesktop.DBus")
         uid = dbus_info.GetConnectionUnixUser(sender)
@@ -37,22 +37,22 @@ class DbusContainerManager(dbus.service.Object):
             raise RuntimeError("Invalid session pid")
         do_start(self.args, session)
 
-    @dbus.service.method("id.waydro.ContainerManager", in_signature='b', out_signature='')
+    @dbus.service.method("id.waydro.Container", in_signature='b', out_signature='')
     def Stop(self, quit_session):
         logging.verbose(f"DBus Stop method called with quit_session={quit_session}")
         stop(self.args, quit_session)
 
-    @dbus.service.method("id.waydro.ContainerManager", in_signature='', out_signature='')
+    @dbus.service.method("id.waydro.Container", in_signature='', out_signature='')
     def Freeze(self):
         logging.verbose("DBus Freeze method called")
         freeze(self.args)
 
-    @dbus.service.method("id.waydro.ContainerManager", in_signature='', out_signature='')
+    @dbus.service.method("id.waydro.Container", in_signature='', out_signature='')
     def Unfreeze(self):
         logging.verbose("DBus Unfreeze method called")
         unfreeze(self.args)
 
-    @dbus.service.method("id.waydro.ContainerManager", in_signature='', out_signature='a{ss}')
+    @dbus.service.method("id.waydro.Container", in_signature='', out_signature='a{ss}')
     def GetSession(self):
         logging.verbose("DBus GetSession method called")
         try:
