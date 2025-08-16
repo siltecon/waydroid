@@ -76,16 +76,28 @@ def service(args, looper):
         logging.verbose("Checking if waydroid-dbus service is running...")
         try:
             import subprocess
-            result = subprocess.run(['systemctl', 'is-active', 'waydroid-dbus.service'], 
+            # Use systemctl show to get the actual state, not just is-active
+            result = subprocess.run(['systemctl', 'show', '--property=ActiveState', 'waydroid-dbus.service'], 
                                  capture_output=True, text=True, check=False)
             service_status = result.stdout.strip()
             logging.spam(f"waydroid-dbus service status: '{service_status}' (exit code: {result.returncode})")
             
-            # Check for active, activating, or starting states
-            if result.returncode == 0 and service_status in ['active', 'activating', 'starting']:
-                logging.verbose(f"waydroid-dbus service is already running (status: {service_status})")
+            # Extract the actual state from the output (format: ActiveState=active)
+            if '=' in service_status:
+                actual_state = service_status.split('=')[1]
+                logging.spam(f"Parsed waydroid-dbus state: '{actual_state}'")
+                
+                # Check for any running state (active, activating, starting)
+                if actual_state in ['active', 'activating', 'starting']:
+                    logging.verbose(f"waydroid-dbus service is already running (state: {actual_state})")
+                else:
+                    logging.verbose("Starting waydroid-dbus service...")
+                    subprocess.run(['systemctl', 'start', 'waydroid-dbus.service'], check=True)
+                    logging.verbose("waydroid-dbus service started successfully")
             else:
-                logging.verbose("Starting waydroid-dbus service...")
+                logging.warning(f"Could not parse waydroid-dbus service status: {service_status}")
+                # Fallback: try to start the service
+                logging.verbose("Attempting to start waydroid-dbus service as fallback...")
                 subprocess.run(['systemctl', 'start', 'waydroid-dbus.service'], check=True)
                 logging.verbose("waydroid-dbus service started successfully")
         except Exception as e:
@@ -94,16 +106,28 @@ def service(args, looper):
         # Ensure weston-headless service is running
         logging.verbose("Checking if weston-headless service is running...")
         try:
-            result = subprocess.run(['systemctl', 'is-active', 'weston-headless.service'], 
+            # Use systemctl show to get the actual state, not just is-active
+            result = subprocess.run(['systemctl', 'show', '--property=ActiveState', 'weston-headless.service'], 
                                  capture_output=True, text=True, check=False)
             service_status = result.stdout.strip()
             logging.spam(f"weston-headless service status: '{service_status}' (exit code: {result.returncode})")
             
-            # Check for active, activating, or starting states
-            if result.returncode == 0 and service_status in ['active', 'activating', 'starting']:
-                logging.verbose(f"weston-headless service is already running (status: {service_status})")
+            # Extract the actual state from the output (format: ActiveState=activating)
+            if '=' in service_status:
+                actual_state = service_status.split('=')[1]
+                logging.spam(f"Parsed weston-headless state: '{actual_state}'")
+                
+                # Check for any running state (active, activating, starting)
+                if actual_state in ['active', 'activating', 'starting']:
+                    logging.verbose(f"weston-headless service is already running (state: {actual_state})")
+                else:
+                    logging.verbose("Starting weston-headless service...")
+                    subprocess.run(['systemctl', 'start', 'weston-headless.service'], check=True)
+                    logging.verbose("weston-headless service started successfully")
             else:
-                logging.verbose("Starting weston-headless service...")
+                logging.warning(f"Could not parse weston-headless service status: {service_status}")
+                # Fallback: try to start the service
+                logging.verbose("Attempting to start weston-headless service as fallback...")
                 subprocess.run(['systemctl', 'start', 'weston-headless.service'], check=True)
                 logging.verbose("weston-headless service started successfully")
         except Exception as e:
@@ -113,6 +137,14 @@ def service(args, looper):
         logging.verbose("Checking Weston environment setup...")
         try:
             wayland_runtime = "/run/wayland"
+            # Wait for Weston runtime directory to be created (max 10 seconds)
+            max_wait = 10
+            wait_count = 0
+            while not os.path.exists(wayland_runtime) and wait_count < max_wait:
+                logging.spam(f"Waiting for Weston runtime directory... ({wait_count + 1}/{max_wait})")
+                time.sleep(1)
+                wait_count += 1
+            
             if os.path.exists(wayland_runtime):
                 logging.verbose(f"Weston runtime directory exists: {wayland_runtime}")
                 # Set Weston environment variables
@@ -121,7 +153,7 @@ def service(args, looper):
                 logging.spam(f"Set XDG_RUNTIME_DIR to: {os.environ['XDG_RUNTIME_DIR']}")
                 logging.spam(f"Set WAYLAND_DISPLAY to: {os.environ['WAYLAND_DISPLAY']}")
             else:
-                logging.warning(f"Weston runtime directory not found: {wayland_runtime}")
+                logging.warning(f"Weston runtime directory not found after {max_wait} seconds: {wayland_runtime}")
         except Exception as e:
             logging.warning(f"Failed to setup Weston environment: {e}")
         
