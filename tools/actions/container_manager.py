@@ -78,8 +78,12 @@ def service(args, looper):
             import subprocess
             result = subprocess.run(['systemctl', 'is-active', 'waydroid-dbus.service'], 
                                  capture_output=True, text=True, check=False)
-            if result.returncode == 0 and result.stdout.strip() == 'active':
-                logging.verbose("waydroid-dbus service is already running")
+            service_status = result.stdout.strip()
+            logging.spam(f"waydroid-dbus service status: '{service_status}' (exit code: {result.returncode})")
+            
+            # Check for active, activating, or starting states
+            if result.returncode == 0 and service_status in ['active', 'activating', 'starting']:
+                logging.verbose(f"waydroid-dbus service is already running (status: {service_status})")
             else:
                 logging.verbose("Starting waydroid-dbus service...")
                 subprocess.run(['systemctl', 'start', 'waydroid-dbus.service'], check=True)
@@ -92,8 +96,12 @@ def service(args, looper):
         try:
             result = subprocess.run(['systemctl', 'is-active', 'weston-headless.service'], 
                                  capture_output=True, text=True, check=False)
-            if result.returncode == 0 and result.stdout.strip() == 'active':
-                logging.verbose("weston-headless service is already running")
+            service_status = result.stdout.strip()
+            logging.spam(f"weston-headless service status: '{service_status}' (exit code: {result.returncode})")
+            
+            # Check for active, activating, or starting states
+            if result.returncode == 0 and service_status in ['active', 'activating', 'starting']:
+                logging.verbose(f"weston-headless service is already running (status: {service_status})")
             else:
                 logging.verbose("Starting weston-headless service...")
                 subprocess.run(['systemctl', 'start', 'weston-headless.service'], check=True)
