@@ -149,6 +149,18 @@ def service(args, looper):
     logging.spam("About to call looper.run() - this is where the hang might occur")
     logging.spam(f"Looper type: {type(looper)}, Looper object: {looper}")
     
+    # Test if DBus methods are working by calling Start method locally
+    logging.verbose("Testing DBus Start method to verify service is working...")
+    try:
+        # Create a test session to call the Start method
+        test_session = {"user_id": "0", "pid": str(os.getpid())}
+        logging.spam(f"Calling Start method with test session: {test_session}")
+        dbus_obj.Start(test_session, "test_sender", None)
+        logging.verbose("DBus Start method called successfully - service is working")
+    except Exception as e:
+        logging.warning(f"DBus Start method test failed: {e}")
+        logging.spam(f"Exception type: {type(e)}")
+    
     try:
         logging.spam("Calling looper.run() - entering main loop...")
         
@@ -274,7 +286,17 @@ def start(args):
     
     try:
         logging.spam("Attempting to register DBus service name...")
-        name = dbus.service.BusName("id.waydro.Container", dbus.SystemBus(), do_not_queue=True)
+        # Use the same session bus that the service will use
+        waydroid_dbus_socket = "/run/waydroid/dbus/session_bus_socket"
+        if os.path.exists(waydroid_dbus_socket):
+            logging.verbose(f"Using waydroid-dbus session bus for service registration")
+            os.environ['DBUS_SESSION_BUS_ADDRESS'] = f"unix:path={waydroid_dbus_socket}"
+            bus = dbus.SessionBus()
+        else:
+            logging.warning(f"waydroid-dbus socket not found, using default session bus")
+            bus = dbus.SessionBus()
+        
+        name = dbus.service.BusName("id.waydro.Container", bus, do_not_queue=True)
         logging.spam(f"DBus service name registration successful: {name}")
         logging.verbose("Successfully registered DBus service name: id.waydro.Container")
     except dbus.exceptions.NameExistsException:
