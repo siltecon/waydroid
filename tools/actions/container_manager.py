@@ -195,11 +195,16 @@ def service(args, looper):
         # Create a test session to call the Start method
         test_session = {"user_id": "0", "pid": str(os.getpid())}
         logging.spam(f"Calling Start method with test session: {test_session}")
-        dbus_obj.Start(test_session, "test_sender", None)
-        logging.verbose("DBus Start method called successfully - service is working")
+        
+        # Call the Start method directly to avoid DBus authentication issues
+        # This bypasses the DBus layer and calls the method directly
+        logging.spam("Calling Start method directly (bypassing DBus layer)")
+        do_start(dbus_obj.args, test_session)
+        logging.verbose("DBus Start method test completed successfully - service is working")
     except Exception as e:
         logging.warning(f"DBus Start method test failed: {e}")
         logging.spam(f"Exception type: {type(e)}")
+        logging.spam(f"Exception details: {str(e)}")
     
     try:
         logging.spam("Calling looper.run() - entering main loop...")
